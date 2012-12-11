@@ -351,6 +351,17 @@ do
 
 process_pkt:
 	::h2s_chan?MACPKTT, prt_mac_packet ->
+		int flowtable_entry_cnt = 0;
+		do
+		::flowtable_entry_cnt < FLOWTABLE_ENTRY_NUM ->
+			if
+			::prt_mac_packet.src == flowtable[flowtable_entry_cnt].dl_src 
+			::else->
+				flowtable_entry_cnt++
+
+		::flowtable_entry_cnt>=FLOWTABLE_ENTRY_NUM->		/* not found in flowtable */
+			
+		od
 		
 process_of:
 	::c2s_packet_out_chan[switch_id]?OFPT_PACKET_OUT, dp_ofp_packet_out->
