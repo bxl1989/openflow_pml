@@ -211,7 +211,6 @@ typedef ofp_port_mod {
 #define OFP_FLOW_PERMANENT 0
 
 /* By default, choose a priority in the middle. */
-#define OFP_DEFAULT_PRIORITY 0x8000
 
 enum ofp_flow_mod_flags {
     OFPFF_SEND_FLOW_REM = 1 << 0,  /* Send flow removed message when flow

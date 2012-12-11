@@ -43,12 +43,17 @@ mtype = {
 
     MACPKTT
 };
+typedef mac_packet_t{
+	int src;	/* Ethernet src address */
+	int dst;	/* Ethernet dst address */
+	int type	/* Ethernet frame type */
+};
 
 /* Header on all OpenFlow packets. */
 typedef ofp_header {
     byte version;    /* OFP_VERSION. */
     byte type;       /* One of the OFPT_ constants. */
-    short length;    /* Length including this ofp_header. */
+    short lengthgth;    /* Length including this ofp_header. */
     int xid        /* Transaction id associated with this packet.
                            Replies use the same id as was in the request
                            to facilitate pairing. */
@@ -64,12 +69,12 @@ typedef ofp_header {
 typedef ofp_packet_in_header {
     ofp_header header;
     int buffer_id;     /* ID assigned by datapath. */
-    short total_len;     /* Full length of frame. */
+    short total_length;     /* Full lengthgth of frame. */
     short in_port;       /* Port on which frame was received. */
     byte reason;         /* Reason packet is being sent (one of OFPR_*) */
 /*    byte data[0]         Ethernet frame, halfway through 32-bit word,
                                so the IP header is 32-bit aligned.  The
-                               amount of data is inferred from the length
+                               amount of data is inferred from the lengthgth
                                field in the header.  Because of padding,
                                offsetof(typedef ofp_packet_in, data) ==
                                sizeof(typedef ofp_packet_in) - 2. */
@@ -78,10 +83,11 @@ typedef ofp_packet_in_t {
 	ofp_packet_in_header packet_in_header;
 	mac_packet_t mac_packet 
 };
-/* Action header that is common to all actions.  The length includes the
+/* Action header that is common to all actions.  The lengthgth includes the
  * header and any padding used to make the action 64-bit aligned.
- * NB: The length of an action *must* always be a multiple of eight. */
-enum ofp_action_type {
+ * NB: The lengthgth of an action *must* always be a multiple of eight. */
+/* enum ofp_action_type { */
+mtype = {
     OFPAT_OUTPUT,           /* Output to switch port. */
     OFPAT_SET_VLAN_VID,     /* Set the 802.1q VLAN id. */
     OFPAT_SET_VLAN_PCP,     /* Set the 802.1q priority. */
@@ -94,18 +100,18 @@ enum ofp_action_type {
     OFPAT_SET_TP_SRC,       /* TCP/UDP source port. */
     OFPAT_SET_TP_DST,       /* TCP/UDP destination port. */
     OFPAT_ENQUEUE,          /* Output to queue.  */
-    OFPAT_VENDOR = 0xffff
+    OFPAT_VENDOR 	    /* = 0xffff */
 };
 
 /* Action typedefure for OFPAT_OUTPUT, which sends packets out 'port'.
- * When the 'port' is the OFPP_CONTROLLER, 'max_len' indicates the max
- * number of bytes to send.  A 'max_len' of zero means no bytes of the
+ * When the 'port' is the OFPP_CONTROLLER, 'max_length' indicates the max
+ * number of bytes to send.  A 'max_length' of zero means no bytes of the
  * packet should be sent.*/
 typedef ofp_action_output {
     short type;                  /* OFPAT_OUTPUT. */
-    short len;                   /* Length is 8. */
+    short length;                   /* Length is 8. */
     short port;                  /* Output port. */
-    short max_len;               /* Max length to send to controller. */
+    short max_length;               /* Max lengthgth to send to controller. */
 };
 
 /* The VLAN id is 12 bits, so we can use the entire 16 bits to indicate
@@ -116,58 +122,60 @@ typedef ofp_action_output {
 /* Action typedefure for OFPAT_SET_VLAN_VID. */
 typedef ofp_action_vlan_vid {
     short type;                  /* OFPAT_SET_VLAN_VID. */
-    short len;                   /* Length is 8. */
+    short length;                   /* Length is 8. */
     short vlan_vid;              /* VLAN id. */
 };
 
 /* Action typedefure for OFPAT_SET_VLAN_PCP. */
 typedef ofp_action_vlan_pcp {
     short type;                  /* OFPAT_SET_VLAN_PCP. */
-    short len;                   /* Length is 8. */
+    short length;                   /* Length is 8. */
     byte vlan_pcp;               /* VLAN priority. */
 };
 
 /* Action typedefure for OFPAT_SET_DL_SRC/DST. */
 typedef ofp_action_dl_addr {
     short type;                  /* OFPAT_SET_DL_SRC/DST. */
-    short len;                   /* Length is 16. */
+    short length;                   /* Length is 16. */
     byte dl_addr[OFP_ETH_ALEN];  /* Ethernet address. */
 };
 
 /* Action typedefure for OFPAT_SET_NW_SRC/DST. */
 typedef ofp_action_nw_addr {
     short type;                  /* OFPAT_SET_TW_SRC/DST. */
-    short len;                   /* Length is 8. */
+    short length;                   /* Length is 8. */
     int nw_addr;               /* IP address. */
 };
 
 /* Action typedefure for OFPAT_SET_TP_SRC/DST. */
 typedef ofp_action_tp_port {
     short type;                  /* OFPAT_SET_TP_SRC/DST. */
-    short len;                   /* Length is 8. */
+    short length;                   /* Length is 8. */
     short tp_port;               /* TCP/UDP port. */
 };
 
 /* Action typedefure for OFPAT_SET_NW_TOS. */
 typedef ofp_action_nw_tos {
     short type;                  /* OFPAT_SET_TW_SRC/DST. */
-    short len;                   /* Length is 8. */
+    short length;                   /* Length is 8. */
     byte nw_tos;                 /* IP ToS (DSCP field, 6 bits). */
 };
 
 /* Action header for OFPAT_VENDOR. The rest of the body is vendor-defined. */
 typedef ofp_action_vendor_header {
     short type;                  /* OFPAT_VENDOR. */
-    short len;                   /* Length is a multiple of 8. */
+    short length;                   /* Length is a multiple of 8. */
     int vendor;                /* Vendor ID, which takes the same form
                                        as in "typedef ofp_vendor_header". */
 };
 typedef ofp_action_header {
     short type;                  /* One of OFPAT_*. */
-    short len;                   /* Length of action, including this
-                                       header.  This is the length of action,
+    short length;                   /* Length of action, including this
+                                       header.  This is the lengthgth of action,
                                        including any padding to make it
                                        64-bit aligned. */
+    short arg1;			/* output:port */
+    short arg2			/* output:max_length */
 };
 
 /* Send packet (controller -> datapath). */
@@ -175,15 +183,15 @@ typedef ofp_packet_out_header {
     ofp_header header;
     int buffer_id;           /* ID assigned by datapath (-1 if none). */
     short in_port;             /* Packet's input port (OFPP_NONE if none). */
-    short actions_len;         /* Size of action array in bytes. */
+    short actions_length;         /* Size of action array in bytes. */
     /* ofp_action_header actions[0];  Actions. */
-    /* byte data[0]; */        /* Packet data.  The length is inferred
-                                     from the length field in the header.
+    /* byte data[0]; */        /* Packet data.  The lengthgth is inferred
+                                     from the lengthgth field in the header.
                                      (Only meaningful if buffer_id == -1.) */
 };
 typedef ofp_packet_out_t{
 	ofp_packet_out_header packet_out_header;
-	ofp_action_header actions[16];  /* actions_len ? */
+	ofp_action_header actions[16];  /* actions_length ? */
 	mac_packet_t mac_packet
 }
 /* enum ofp_flow_mod_command { */
@@ -234,19 +242,20 @@ typedef ofp_packet_out_t{
 typedef ofp_match {
     int wildcards;        /* Wildcard fields. */
     short in_port;          /* Input switch port. */
-    byte dl_src[OFP_ETH_ALEN]; /* Ethernet source address. */
-    byte dl_dst[OFP_ETH_ALEN]; /* Ethernet destination address. */
+    int dl_src; /* Ethernet source address. */
+    int dl_dst; /* Ethernet destination address. */
     short dl_vlan;          /* Input VLAN id. */
     byte dl_vlan_pcp;       /* Input VLAN priority. */
     short dl_type;          /* Ethernet frame type. */
-    byte nw_tos;            /* IP ToS (actually DSCP field, 6 bits). */
-    byte nw_proto;          /* IP protocol or lower 8 bits of
+/*    byte nw_tos;             IP ToS (actually DSCP field, 6 bits). */
+/*    byte nw_proto;           IP protocol or lower 8 bits of
                                 * ARP opcode. */
-    int nw_src;           /* IP source address. */
-    int nw_dst;           /* IP destination address. */
-    short tp_src;           /* TCP/UDP source port. */
-    short tp_dst;           /* TCP/UDP destination port. */
+/*    int nw_src;            IP source address. */
+/*    int nw_dst;            IP destination address. */
+/*    short tp_src;            TCP/UDP source port. */
+/*    short tp_dst;            TCP/UDP destination port. */
 };
+#define OFP_DEFAULT_PRIORITY 0x8000
 
 typedef ofp_flow_mod_header {
     ofp_header header;
@@ -257,7 +266,7 @@ typedef ofp_flow_mod_header {
     short command;             /* One of OFPFC_*. */
     short idle_timeout;        /* Idle time before discarding (seconds). */
     short hard_timeout;        /* Max time before discarding (seconds). */
-    short priority;            /* Priority level of flow entry. */
+    short pri;            /* Priority level of flow entry. */
     int buffer_id;           /* Buffered packet to apply to (or -1).
                                      Not meaningful for OFPFC_DELETE*. */
     short out_port;            /* For OFPFC_DELETE* commands, require
@@ -265,28 +274,18 @@ typedef ofp_flow_mod_header {
                                      output port.  A value of OFPP_NONE
                                      indicates no restriction. */
     short flags;               /* One of OFPFF_*. */
-    /* ofp_action_header actions[0];  The action length is inferred
-                                            from the length field in the
+    /* ofp_action_header actions[0];  The action lengthgth is inferred
+                                            from the lengthgth field in the
                                             header. */
 }
 typedef ofp_flow_mod_t{
 	ofp_flow_mod_header flow_mod_header;
-	ofp_action_header actions
+	ofp_action_header action
 };
 
 #define SWITCH_NUM 1
 #define HOST_NUM 2
 #define BCAST_ADDR -1
-typedef mac_packet_t{
-	int src;
-	
-};
-typedef mactable_entry{
-	bool used;
-	byte inport;
-	int time;
-	mac_packet packet	
-};
 
 
 typedef dp_ofp_packet_in_t{
@@ -307,7 +306,7 @@ typedef dp_ofp_port_flood_t{
 };
 typedef prt_mac_packet_t{
 	int port;
-	mac_packet_t packet
+	mac_packet_t mac_packet
 };
 
 chan c2s_packet_out_chan[SWITCH_NUM] = [qsize_sc] of { mtype, dp_ofp_packet_out_t /* ofpacket */}; 
@@ -319,22 +318,30 @@ chan c2s_port_flood_chan[SWITCH_NUM] = [qsize_sc] of { mtype, dp_ofp_port_flood_
 chan s2c_packet_in_chan = [SWITCH_NUM * qsize_sc] of { mtype, dp_ofp_packet_in_t }; 
 /* chan s2c_packet_in_chan[SWITCH_NUM] = [SWITCH_NUM * qsize_sc] of {int, ofp_packet_in, mac_packet}; */
 		/* only packet_in is delivered in this application */
-chan h2s_chan = [qsize_sh] of { mtype, mac_packet} 
-chan s2h_chan = [qsize_sh] of { mtype, mac_packet}
+chan h2s_chan[SWITCH_NUM] = [qsize_sh] of { mtype, prt_mac_packet_t } 
+chan s2h_chan[SWITCH_NUM] = [qsize_sh] of { mtype, prt_mac_packet_t }
 
-
+proctype host(int src, int dst, int switch_id, int switch_port){
+	prt_mac_packet_t prt_mac_packet;
+	prt_mac_packet.port = switch_port;
+	prt_mac_packet.mac_packet.src = src;
+	prt_mac_packet.mac_packet.dst = dst;
+	do
+	::h2s_chan[switch_id] ! MACPKTT, prt_mac_packet
+	od;
+}
 
 typedef flowtable_entry{
 	ofp_match header_fields;
 	int counter;
+	ofp_action_header action 	/* should be ofp_action_header actions[16]; 
+				  	*  but in this model, application only sends output action 
+				  	*  for flow mod to switch
+					*/
 	  		
 };
-flowtable_entry flowtable[];
-
-
-proctype host(){
-
-}
+#define FLOWTABLE_ENTRY_NUM 256
+flowtable_entry flowtable[FLOWTABLE_ENTRY_NUM];
 proctype switch(int switch_id){
 prt_mac_packet_t  prt_mac_packet;
 dp_ofp_packet_out_t dp_ofp_packet_out;
@@ -352,10 +359,19 @@ process_of:
 od
 }
 
-
+typedef mactable_entry {
+	bool used;
+	byte inport;
+	int time;
+	mac_packet packet	
+};
+typedef mactable_row {
+	mactable_entry column[HOST_NUM]
+};
 proctype controller(){
 dp_ofp_packet_in_t dp_ofp_packet_in;
-mactable_entry mactable[SWITCH_NUM][HOST_NUM]; 
+
+mactable_row mactable[SWITCH_NUM]; 
 mactable_entry new_entry;
 int srcaddr, dstaddr;
 int switch_cnt;
@@ -363,29 +379,31 @@ packet_in:
 	do
 	:: s2c_packet_in_chan ? OFPT_PACKET_IN, dp_ofp_packet_in->
 do_l2_learning:
+		mac_packet_t mac_packet = dp_ofp_packet_in.packet_in.mac_packet;
+		ofp_packet_in_header packet_in_header = dp_ofp_packet_in.packet_in.packet_in_header;
 		srcaddr = dp_ofp_packet_in.packet_in.mac_packet.src;
 		switch_cnt = dp_ofp_packet_in.dpid;
 		if
 		::srcaddr != BCAST_ADDR -> 
 			if
 			/* mactable has an entry of srcaddr */
-			::mactable[switch_cnt][srcaddr].used == true->
+			::mactable[switch_cnt].column[srcaddr].used == true->
 				if
-				::mactable[switch_cnt][srcaddr].inport!=dp_ofp_packet_in.packet_in.packet_in_header.in_port-> 
+				::mactable[switch_cnt].column[srcaddr].inport!=dp_ofp_packet_in.packet_in.packet_in_header.in_port-> 
 				/* MAC has moved! */
 					new_entry.inport = dp_ofp_packet_in.packet_in.packet_in_header.in_port;
 					/* new_entry.time =    timestamp ? */
 					new_entry.packet = dp_ofp_packet_in.packet_in.mac_packet;
-					mactable[switch_cnt][srcaddr] = new_entry;
+					mactable[switch_cnt].column[srcaddr] = new_entry;
 				        goto forward_l2_packet	
 					
 				fi
 			/* mactable has no entry of srcaddr */
-			::mactable[switch_cnt][srcaddr].used == false->
+			::mactable[switch_cnt].column[srcaddr].used == false->
 				new_entry.inport = dp_ofp_packet_in.packet_in.packet_in_header.in_port;
 				/* new_entry.time =    timestamp ? */
 				new_entry.packet = dp_ofp_packet_in.packet_in.mac_packet;
-				mactable[switch_cnt][srcaddr] = new_entry;
+				mactable[switch_cnt].column[srcaddr] = new_entry;
 				goto forward_l2_packet	
 			fi
 		fi;
@@ -393,16 +411,40 @@ forward_l2_packet:
 		dstaddr = dp_ofp_packet_in.packet_in.mac_packet.dst;
 		if
 		::dstaddr != BCAST_ADDR && mactable[switch_cnt][dstaddr].used == true ->
-			prt = mactable[switch_cnt][dstaddr].inport ->
+			prt = mactable[switch_cnt].column[dstaddr].inport ->
 			if
 			:: port == packet_in_hdr.inport ->
-				c2s_port_flood_chan[switch_cnt] ! port
+				goto send_openflow_OFPP_FLOOD; /* c2s_port_flood_chan[switch_cnt] ! port */
 			:: port != packet_in_hdr.inport ->
+install_datapath_flow:
 				/* flow */
-				
+				ofp_match match;
+				match.dl_src = mac_packet.src;
+				match.dl_dst = mac_packet.dst;
+				match.dl_type = mac_packet.type;
+				match.in_port =  packet_in_header.in_port;
 		       		/* actions */
-				/* install_flow */	
-			fi
+				ofp_action_header action;
+				action.type = OFPAT_OUTPUT;
+				action.length = 8;
+				action.arg1 = prt;
+				action.arg2 = 0;
+				/* install_flow */
+				dp_ofp_flow_mod_t dp_ofp_flow_mod;
+				dp_ofp_flow_mod.dpid = switch_cnt	/* dpid */
+				dp_ofp_flow_mod.flow_mod_header.command = OFPFC_ADD;
+				dp_ofp_flow_mod.flow_mod_header.pri = OFP_DEFAULT_PRIORITY;
+				
+				dp_ofp_flow_mod.flow_mod.action = action;
+send_flow_command:
+				c2s_flow_mod_chan ! dp_ofp_flow_mod;
+send_openflow_packet:
+				
+									
+			fi;
+		::else->
+send_openflow_OFPP_FLOOD:
+					
 		fi
 
 			
