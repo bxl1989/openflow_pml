@@ -319,7 +319,7 @@ chan s2c_packet_in_chan = [SWITCH_NUM * qsize_sc] of { mtype, dp_ofp_packet_in_t
 /* chan s2c_packet_in_chan[SWITCH_NUM] = [SWITCH_NUM * qsize_sc] of {int, ofp_packet_in, mac_packet}; */
 		/* only packet_in is delivered in this application */
 chan h2s_chan[SWITCH_NUM] = [qsize_sh] of { mtype, prt_mac_packet_t } 
-chan s2h_chan[SWITCH_NUM] = [qsize_sh] of { mtype, prt_mac_packet_t }
+chan s2h_chan[SWITCH_NUM] = [qsize_sh] of { mtype, mac_packet_t }
 
 proctype host(int src, int dst, int switch_id, int switch_port){
 	prt_mac_packet_t prt_mac_packet;
@@ -355,11 +355,29 @@ process_pkt:
 		do
 		::flowtable_entry_cnt < FLOWTABLE_ENTRY_NUM ->
 			if
-			::prt_mac_packet.src == flowtable[flowtable_entry_cnt].dl_src 
+			/* ::flowtable[flowtable_entry_cnt].wilcards 
+			*	goto apply_actions */
+			::prt_mac_packet.port == flowtable[flowtable_entry_cnt].header_fields.in_port &&
+				prt_mac_packet.mac_packet.src == flowtable[flowtable_entry_cnt].header_fields.dl_src &&
+				prt_mac_packet.mac_packet.dst == flowtable[flowtable_entry_cnt].header_fields.dl_dst ->
+apply_actions:
+				flowtable[flowtable_entry_cnt].counter++;
+				if
+				::flowtable[flowtable_entry_cnt].action.type == OFPAT_OUTPUT->
+					s2h_chan[flowtable[flowtable_entry_cnt].action.arg1] ! MACPKTT, prt_mac_packet.mac_packet;
+				  	
+				fi;
 			::else->
 				flowtable_entry_cnt++
 
 		::flowtable_entry_cnt>=FLOWTABLE_ENTRY_NUM->		/* not found in flowtable */
+			dp_ofp_packet_in_t dp_ofp_packet_in;
+			dp_ofp_packet_in.dpid = switch_id;	/* use switch_id to indicate datapath id
+								   this means switch_cnt in controller */
+			dp_ofp_packet_in.packet_in.mac_packet = prt_mac_packet.mac_packet;
+			dp_ofp_packet_in.packet_in.packet_in_header.in_port = prt_mac_packet.port;
+		        dp_ofp_packet_in.packet_in.packet_in_header.reason = OFPR_NO_MATCH;
+			s2c_packet_in_chan ! OFPT_PACKET_IN, dp_ofp_packet_in;	
 			
 		od
 		
@@ -424,9 +442,9 @@ forward_l2_packet:
 		::dstaddr != BCAST_ADDR && mactable[switch_cnt][dstaddr].used == true ->
 			prt = mactable[switch_cnt].column[dstaddr].inport ->
 			if
-			:: port == packet_in_hdr.inport ->
+			:: port == dp_ofp_packet_in.packet_in.packet_in_header.inport ->
 				goto send_openflow_OFPP_FLOOD; /* c2s_port_flood_chan[switch_cnt] ! port */
-			:: port != packet_in_hdr.inport ->
+			:: port != dp_ofp_packet_in.packet_in.packet_in_header.inport ->
 install_datapath_flow:
 				/* flow */
 				ofp_match match;
