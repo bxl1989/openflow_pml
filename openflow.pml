@@ -243,7 +243,7 @@ chan c2s_flow_mod_chan[SWITCH_NUM] = [qsize_sc] of { mtype, dp_ofp_flow_mod_t /*
 chan c2s_port_flood_chan[SWITCH_NUM] = [qsize_sc] of { mtype, dp_ofp_port_flood_t /* ofpacket */ }; 
 		/* OFPP_FLOOD */
 chan s2c_packet_in_chan = [qsize_sc] of { mtype, dp_ofp_packet_in_t }; 
-/* chan s2c_packet_in_chan[SWITCH_NUM] = [SWITCH_NUM * qsize_sc] of {int, ofp_packet_in, mac_packet}; */
+/* chan s2c_packet_in_chan[SWITCH_NUM] = [SWITCH_NUM * qsize_sc] of {int, ofp_packet_in, mac_packet; */
 		/* only packet_in is delivered in this application */
 chan h2s_chan[SWITCH_NUM] = [qsize_sh] of { mtype, prt_mac_packet_t } 
 typedef s2h_chan_t{
@@ -457,7 +457,7 @@ install_datapath_flow:
 				ofp_action_header_exchange_chan	! action;
 				ofp_action_header_exchange_chan ? dp_ofp_flow_mod.flow_mod.action;
 send_flow_command:
-				c2s_flow_mod_chan[switch_cnt] ! dp_ofp_flow_mod;
+				c2s_flow_mod_chan[switch_cnt] ! OFPT_FLOW_MOD, dp_ofp_flow_mod;
 send_openflow_packet:
 send_openflow_packet_out:
 				dp_ofp_packet_out.dpid = switch_cnt;
@@ -481,7 +481,7 @@ send_openflow_OFPP_FLOOD:
 datapath_leave:
 datapath_join:
 timer:
-};
+}
 
 init{
 	run controller();
