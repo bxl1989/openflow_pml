@@ -47,15 +47,6 @@ typedef mac_packet_t{
 	int type	/* Ethernet frame type */
 };
 
-/* Header on all OpenFlow packets. */
-typedef ofp_header {
-    byte version;    /* OFP_VERSION. */
-    byte type;       /* One of the OFPT_ constants. */
-    short lengthgth;    /* Length including this ofp_header. */
-    int xid        /* Transaction id associated with this packet.
-                           Replies use the same id as was in the request
-                           to facilitate pairing. */
-};
 
 
 /* Why is this packet being sent to the controller? */
@@ -101,71 +92,6 @@ mtype = {
     OFPAT_VENDOR 	    /* = 0xffff */
 };
 
-/* Action typedefure for OFPAT_OUTPUT, which sends packets out 'port'.
- * When the 'port' is the OFPP_CONTROLLER, 'max_length' indicates the max
- * number of bytes to send.  A 'max_length' of zero means no bytes of the
- * packet should be sent.*/
-typedef ofp_action_output {
-    short type;                  /* OFPAT_OUTPUT. */
-    short length;                   /* Length is 8. */
-    short port;                  /* Output port. */
-    short max_length;               /* Max lengthgth to send to controller. */
-};
-
-/* The VLAN id is 12 bits, so we can use the entire 16 bits to indicate
- * special conditions.  All ones is used to match that no VLAN id was
- * set. */
-#define OFP_VLAN_NONE      0xffff
-
-/* Action typedefure for OFPAT_SET_VLAN_VID. */
-typedef ofp_action_vlan_vid {
-    short type;                  /* OFPAT_SET_VLAN_VID. */
-    short length;                   /* Length is 8. */
-    short vlan_vid;              /* VLAN id. */
-};
-
-/* Action typedefure for OFPAT_SET_VLAN_PCP. */
-typedef ofp_action_vlan_pcp {
-    short type;                  /* OFPAT_SET_VLAN_PCP. */
-    short length;                   /* Length is 8. */
-    byte vlan_pcp;               /* VLAN priority. */
-};
-
-/* Action typedefure for OFPAT_SET_DL_SRC/DST. */
-typedef ofp_action_dl_addr {
-    short type;                  /* OFPAT_SET_DL_SRC/DST. */
-    short length;                   /* Length is 16. */
-    int dl_addr  /* Ethernet address. */
-};
-
-/* Action typedefure for OFPAT_SET_NW_SRC/DST. */
-typedef ofp_action_nw_addr {
-    short type;                  /* OFPAT_SET_TW_SRC/DST. */
-    short length;                   /* Length is 8. */
-    int nw_addr;               /* IP address. */
-};
-
-/* Action typedefure for OFPAT_SET_TP_SRC/DST. */
-typedef ofp_action_tp_port {
-    short type;                  /* OFPAT_SET_TP_SRC/DST. */
-    short length;                   /* Length is 8. */
-    short tp_port;               /* TCP/UDP port. */
-};
-
-/* Action typedefure for OFPAT_SET_NW_TOS. */
-typedef ofp_action_nw_tos {
-    short type;                  /* OFPAT_SET_TW_SRC/DST. */
-    short length;                   /* Length is 8. */
-    byte nw_tos;                 /* IP ToS (DSCP field, 6 bits). */
-};
-
-/* Action header for OFPAT_VENDOR. The rest of the body is vendor-defined. */
-typedef ofp_action_vendor_header {
-    short type;                  /* OFPAT_VENDOR. */
-    short length;                   /* Length is a multiple of 8. */
-    int vendor;                /* Vendor ID, which takes the same form
-                                       as in "typedef ofp_vendor_header". */
-};
 typedef ofp_action_header {
     short type;                  /* One of OFPAT_*. */
     short length;                   /* Length of action, including this
@@ -325,13 +251,21 @@ chan s2c_packet_in_chan = [qsize_sc] of { mtype, dp_ofp_packet_in_t };
 chan h2s_chan[SWITCH_NUM] = [qsize_sh] of { mtype, prt_mac_packet_t } 
 chan s2h_chan[SWITCH_NUM] = [qsize_sh] of { mtype, mac_packet_t }
 
-proctype host(int src; int dst; int switch_id; int switch_port){
+#define INTERACTION_TOTAL 16
+proctype normal_host(int src; int dst; int switch_id; int switch_port){
 	prt_mac_packet_t prt_mac_packet;
+	int interaction_cnt;
 	prt_mac_packet.port = switch_port;
 	prt_mac_packet.mac_packet.src = src;
 	prt_mac_packet.mac_packet.dst = dst;
+	interaction_cnt = 0;
 	do
-	::h2s_chan[switch_id] ! MACPKTT, prt_mac_packet
+	::interaction_cnt < INTERACTION_TOTAL ->
+		interactionh2s_chan[switch_id] ! MACPKTT, prt_mac_packet;
+		interaction_cnt++;
+		
+	::else->
+		break
 	od;
 };
 

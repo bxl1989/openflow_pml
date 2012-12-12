@@ -587,3 +587,82 @@ typedef ofp_queue_stats {
     uint64_t tx_packets;     /* Number of transmitted packets. */
     uint64_t tx_errors;      /* Number of packets dropped due to overrun. */
 };
+
+
+
+/******** used but discarded *****************/
+/* Header on all OpenFlow packets. */
+typedef ofp_header {
+    byte version;    /* OFP_VERSION. */
+    byte type;       /* One of the OFPT_ constants. */
+    short lengthgth;    /* Length including this ofp_header. */
+    int xid        /* Transaction id associated with this packet.
+                           Replies use the same id as was in the request
+                           to facilitate pairing. */
+};
+/* Action typedefure for OFPAT_OUTPUT, which sends packets out 'port'.
+ * When the 'port' is the OFPP_CONTROLLER, 'max_length' indicates the max
+ * number of bytes to send.  A 'max_length' of zero means no bytes of the
+ * packet should be sent.*/
+typedef ofp_action_output {
+    short type;                  /* OFPAT_OUTPUT. */
+    short length;                   /* Length is 8. */
+    short port;                  /* Output port. */
+    short max_length;               /* Max lengthgth to send to controller. */
+};
+
+/* The VLAN id is 12 bits, so we can use the entire 16 bits to indicate
+ * special conditions.  All ones is used to match that no VLAN id was
+ * set. */
+#define OFP_VLAN_NONE      0xffff
+
+/* Action typedefure for OFPAT_SET_VLAN_VID. */
+typedef ofp_action_vlan_vid {
+    short type;                  /* OFPAT_SET_VLAN_VID. */
+    short length;                   /* Length is 8. */
+    short vlan_vid;              /* VLAN id. */
+};
+
+/* Action typedefure for OFPAT_SET_VLAN_PCP. */
+typedef ofp_action_vlan_pcp {
+    short type;                  /* OFPAT_SET_VLAN_PCP. */
+    short length;                   /* Length is 8. */
+    byte vlan_pcp;               /* VLAN priority. */
+};
+
+/* Action typedefure for OFPAT_SET_DL_SRC/DST. */
+typedef ofp_action_dl_addr {
+    short type;                  /* OFPAT_SET_DL_SRC/DST. */
+    short length;                   /* Length is 16. */
+    int dl_addr  /* Ethernet address. */
+};
+
+/* Action typedefure for OFPAT_SET_NW_SRC/DST. */
+typedef ofp_action_nw_addr {
+    short type;                  /* OFPAT_SET_TW_SRC/DST. */
+    short length;                   /* Length is 8. */
+    int nw_addr;               /* IP address. */
+};
+
+/* Action typedefure for OFPAT_SET_TP_SRC/DST. */
+typedef ofp_action_tp_port {
+    short type;                  /* OFPAT_SET_TP_SRC/DST. */
+    short length;                   /* Length is 8. */
+    short tp_port;               /* TCP/UDP port. */
+};
+
+/* Action typedefure for OFPAT_SET_NW_TOS. */
+typedef ofp_action_nw_tos {
+    short type;                  /* OFPAT_SET_TW_SRC/DST. */
+    short length;                   /* Length is 8. */
+    byte nw_tos;                 /* IP ToS (DSCP field, 6 bits). */
+};
+
+/* Action header for OFPAT_VENDOR. The rest of the body is vendor-defined. */
+typedef ofp_action_vendor_header {
+    short type;                  /* OFPAT_VENDOR. */
+    short length;                   /* Length is a multiple of 8. */
+    int vendor;                /* Vendor ID, which takes the same form
+                                       as in "typedef ofp_vendor_header". */
+};
+
