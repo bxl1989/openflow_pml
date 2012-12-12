@@ -13,22 +13,37 @@ proctype A(){
 		cnt++;
 		if
 		::c2?y->
-			printf();
-	::else->
-		
-	  
+			printf("%d\n",y);
+		::timeout->
+			printf("timeout\n");
+		fi
+	::cnt>=16->
+		break	  
 	od
 }
 proctype B(){
 	int cnt;
 	int y;
+	int x;
+	cnt = 0;
+	y = 10;
+	do
+	::cnt<16->
+		c2!y;
+		cnt++;
+		if
+		::c1?x->
+			printf("%d\n",x);
+		::timeout->
+			printf("timeout\n");
+		fi
+	::cnt>=16->
+		break	  
+	od
 	
 }
-proctype C(){
 
-}
 init{
-	int x,y;
-	int cnt;
-	
+	run A();	
+	run B();
 }

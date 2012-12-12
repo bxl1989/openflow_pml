@@ -56,7 +56,6 @@ typedef mac_packet_t{
 
 /* Packet received on port (datapath -> controller). */
 typedef ofp_packet_in_header {
-    ofp_header header;
     int buffer_id;     /* ID assigned by datapath. */
     short total_length;     /* Full lengthgth of frame. */
     short in_port;       /* Port on which frame was received. */
@@ -104,7 +103,6 @@ typedef ofp_action_header {
 
 /* Send packet (controller -> datapath). */
 typedef ofp_packet_out_header {
-    ofp_header header;
     int buffer_id;           /* ID assigned by datapath (-1 if none). */
     short in_port;             /* Packet's input port (OFPP_NONE if none). */
     short actions_length;         /* Size of action array in bytes. */
@@ -185,7 +183,6 @@ typedef ofp_match {
 #define OFP_DEFAULT_PRIORITY 0
 
 typedef ofp_flow_mod_header {
-    ofp_header header;
     ofp_match match;      /* Fields to match */
     /* uint64_t cookie;              Opaque controller-issued identifier. */
 
@@ -249,11 +246,14 @@ chan s2c_packet_in_chan = [qsize_sc] of { mtype, dp_ofp_packet_in_t };
 /* chan s2c_packet_in_chan[SWITCH_NUM] = [SWITCH_NUM * qsize_sc] of {int, ofp_packet_in, mac_packet}; */
 		/* only packet_in is delivered in this application */
 chan h2s_chan[SWITCH_NUM] = [qsize_sh] of { mtype, prt_mac_packet_t } 
-chan s2h_chan[SWITCH_NUM] = [qsize_sh] of { mtype, mac_packet_t }
-
+typedef s2h_chan_t{
+	chan hosts[HOST_NUM] = [qsize_sh] of { mtype, mac_packet_t }
+};
+s2h_chan_t s2h_chan[SWITCH_NUM];
 #define INTERACTION_TOTAL 16
-proctype normal_host(int src; int dst; int switch_id; int switch_port){
+proctype normal_host(int src; int dst; int switch_id; int switch_port){	/* host source addr should be the same as its switch_port */
 	prt_mac_packet_t prt_mac_packet;
+	mac_packet_t recv_mac_packet;
 	int interaction_cnt;
 	prt_mac_packet.port = switch_port;
 	prt_mac_packet.mac_packet.src = src;
@@ -261,10 +261,19 @@ proctype normal_host(int src; int dst; int switch_id; int switch_port){
 	interaction_cnt = 0;
 	do
 	::interaction_cnt < INTERACTION_TOTAL ->
-		interactionh2s_chan[switch_id] ! MACPKTT, prt_mac_packet;
+		h2s_chan[switch_id] ! MACPKTT, prt_mac_packet;
 		interaction_cnt++;
-		
-	::else->
+		if
+		::s2h_chan[switch_id].hosts[switch_port] ? MACPKTT, recv_mac_packet->
+			if
+			::recv_mac_packet.dst == src->
+				printf("Host %d receive reply successfully\n", src);
+			fi
+		::timeout->
+			printf("Host %d not receive any reply\n", src);
+			break;
+		fi
+	::interaction_cnt >= INTERACTION_TOTAL->
 		break
 	od;
 };
@@ -307,7 +316,7 @@ apply_actions:
 				flowtable[flowtable_entry_cnt].counter++;
 				if
 				::flowtable[flowtable_entry_cnt].action.type == OFPAT_OUTPUT->
-					s2h_chan[flowtable[flowtable_entry_cnt].action.arg1] ! MACPKTT, prt_mac_packet.mac_packet
+					s2h_chan[switch_id].hosts[flowtable[flowtable_entry_cnt].action.arg1] ! MACPKTT, prt_mac_packet.mac_packet
 				  	
 				fi;
 				break;
@@ -328,11 +337,15 @@ apply_actions:
 			s2c_packet_in_chan ! OFPT_PACKET_IN, dp_ofp_packet_in;
 			break;
 		 od; 
-/*
+
 	::c2s_packet_out_chan[switch_id]?OFPT_PACKET_OUT, dp_ofp_packet_out->
 process_of_packet_out:
-		skip
-*/
+		if
+		::dp_ofp_packet_out.packet_out.action.type ==  OFPAT_OUTPUT->
+			s2h_chan[switch_id].hosts[dp_ofp_packet_out.packet_out.action.arg1] ! MACPKTT,dp_ofp_packet_out.packet_out.mac_packet
+			
+		fi	
+
 	::c2s_flow_mod_chan[switch_id]?OFPT_FLOW_MOD, dp_ofp_flow_mod ->
 		if
 		:: dp_ofp_flow_mod.flow_mod.flow_mod_header.command==OFPFC_ADD ->
@@ -377,6 +390,7 @@ ofp_match match;
 ofp_action_header action;
 chan ofp_action_header_exchange_chan = [1] of { ofp_action_header  };
 dp_ofp_flow_mod_t dp_ofp_flow_mod;
+dp_ofp_packet_out_t dp_ofp_packet_out;
 packet_in:
 	do
 	:: s2c_packet_in_chan ? OFPT_PACKET_IN, dp_ofp_packet_in->
@@ -445,8 +459,17 @@ install_datapath_flow:
 send_flow_command:
 				c2s_flow_mod_chan[switch_cnt] ! dp_ofp_flow_mod;
 send_openflow_packet:
-				
-									
+send_openflow_packet_out:
+				dp_ofp_packet_out.dpid = switch_cnt;
+
+				mac_packet_exchange_chan ! mac_packet;
+				mac_packet_exchange_chan ? dp_ofp_packet_out.packet_out.mac_packet;
+
+				ofp_action_header_exchange_chan	! action;
+				ofp_action_header_exchange_chan	? dp_ofp_packet_out.packet_out.action;
+				dp_ofp_packet_out.packet_out.packet_out_header.in_port = packet_in_header.in_port;
+
+				c2s_packet_out_chan[switch_cnt] ! OFPT_PACKET_OUT, dp_ofp_packet_out;					
 			fi;
 		::else->
 send_openflow_OFPP_FLOOD:
@@ -463,6 +486,6 @@ timer:
 init{
 	run controller();
 	run switch(0);
-	run host(1, 2, 0, 1);
-	run host(2, 1, 0, 2);
+	run normal_host(0, 1, 0, 0);
+	run normal_host(1, 0, 0, 1);
 }
