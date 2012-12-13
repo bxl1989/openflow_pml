@@ -56,8 +56,8 @@ typedef mac_packet_t{
 
 /* Packet received on port (datapath -> controller). */
 typedef ofp_packet_in_header {
-    int buffer_id;     /* ID assigned by datapath. */
-    short total_length;     /* Full lengthgth of frame. */
+/*    int buffer_id;      ID assigned by datapath. */
+/*    short total_length;      Full lengthgth of frame. */
     short in_port;       /* Port on which frame was received. */
     byte reason;         /* Reason packet is being sent (one of OFPR_*) */
 /*    byte data[0]         Ethernet frame, halfway through 32-bit word,
@@ -93,7 +93,7 @@ mtype = {
 
 typedef ofp_action_header {
     short type;                  /* One of OFPAT_*. */
-    short length;                   /* Length of action, including this
+    short length;                /*    Length of action, including this
                                        header.  This is the lengthgth of action,
                                        including any padding to make it
                                        64-bit aligned. */
@@ -103,9 +103,9 @@ typedef ofp_action_header {
 
 /* Send packet (controller -> datapath). */
 typedef ofp_packet_out_header {
-    int buffer_id;           /* ID assigned by datapath (-1 if none). */
+/*    int buffer_id;            ID assigned by datapath (-1 if none). */
     short in_port;             /* Packet's input port (OFPP_NONE if none). */
-    short actions_length;         /* Size of action array in bytes. */
+/*    short actions_length;          Size of action array in bytes. */
     /* ofp_action_header actions[0];  Actions. */
     /* byte data[0]; */        /* Packet data.  The lengthgth is inferred
                                      from the lengthgth field in the header.
@@ -169,8 +169,8 @@ typedef ofp_match {
     short in_port;          /* Input switch port. */
     int dl_src; /* Ethernet source address. */
     int dl_dst; /* Ethernet destination address. */
-    short dl_vlan;          /* Input VLAN id. */
-    byte dl_vlan_pcp;       /* Input VLAN priority. */
+/*    short dl_vlan;           Input VLAN id. */
+/*    byte dl_vlan_pcp;        Input VLAN priority. */
     short dl_type;          /* Ethernet frame type. */
 /*    byte nw_tos;             IP ToS (actually DSCP field, 6 bits). */
 /*    byte nw_proto;           IP protocol or lower 8 bits of
@@ -188,16 +188,16 @@ typedef ofp_flow_mod_header {
 
     /* Flow actions. */
     short command;             /* One of OFPFC_*. */
-    short idle_timeout;        /* Idle time before discarding (seconds). */
-    short hard_timeout;        /* Max time before discarding (seconds). */
+/*    short idle_timeout;         Idle time before discarding (seconds). */
+/*    short hard_timeout;         Max time before discarding (seconds). */
     short pri;            /* Priority level of flow entry. */
-    int buffer_id;           /* Buffered packet to apply to (or -1).
+/*    int buffer_id;            Buffered packet to apply to (or -1).
                                      Not meaningful for OFPFC_DELETE*. */
-    short out_port;            /* For OFPFC_DELETE* commands, require
+/*    short out_port;             For OFPFC_DELETE* commands, require
                                      matching entries to include this as an
                                      output port.  A value of OFPP_NONE
                                      indicates no restriction. */
-    short flags;               /* One of OFPFF_*. */
+/*    short flags;                One of OFPFF_*. */
     /* ofp_action_header actions[0];  The action lengthgth is inferred
                                             from the lengthgth field in the
                                             header. */
@@ -236,18 +236,18 @@ typedef prt_mac_packet_t{
 #define qsize_sc 256
 #define qsize_sh 256 
 
-chan c2s_packet_out_chan[SWITCH_NUM] = [qsize_sc] of { mtype, dp_ofp_packet_out_t /* ofpacket */}; 
+chan c2s_packet_out_chan[SWITCH_NUM] = [qsize_sc] of { /* mtype, */ dp_ofp_packet_out_t /* ofpacket */}; 
 		/* packet_out */
-chan c2s_flow_mod_chan[SWITCH_NUM] = [qsize_sc] of { mtype, dp_ofp_flow_mod_t /* ofpacket */ }; 
+chan c2s_flow_mod_chan[SWITCH_NUM] = [qsize_sc] of { /* mtype, */ dp_ofp_flow_mod_t /* ofpacket */ }; 
 		/* flow mod */
-chan c2s_port_flood_chan[SWITCH_NUM] = [qsize_sc] of { mtype, dp_ofp_port_flood_t /* ofpacket */ }; 
+chan c2s_port_flood_chan[SWITCH_NUM] = [qsize_sc] of { /* mtype, */ dp_ofp_port_flood_t /* ofpacket */ }; 
 		/* OFPP_FLOOD */
-chan s2c_packet_in_chan = [qsize_sc] of { mtype, dp_ofp_packet_in_t }; 
+chan s2c_packet_in_chan = [qsize_sc] of { /* mtype, */ dp_ofp_packet_in_t }; 
 /* chan s2c_packet_in_chan[SWITCH_NUM] = [SWITCH_NUM * qsize_sc] of {int, ofp_packet_in, mac_packet; */
 		/* only packet_in is delivered in this application */
-chan h2s_chan[SWITCH_NUM] = [qsize_sh] of { mtype, prt_mac_packet_t } 
+chan h2s_chan[SWITCH_NUM] = [qsize_sh] of { /* mtype, */ prt_mac_packet_t };
 typedef s2h_chan_t{
-	chan hosts[HOST_NUM] = [qsize_sh] of { mtype, mac_packet_t }
+	chan hosts[HOST_NUM] = [qsize_sh] of { /* mtype, */ mac_packet_t }
 };
 s2h_chan_t s2h_chan[SWITCH_NUM];
 #define INTERACTION_TOTAL 16
@@ -261,10 +261,10 @@ proctype normal_host(int src; int dst; int switch_id; int switch_port){	/* host 
 	interaction_cnt = 0;
 	do
 	::interaction_cnt < INTERACTION_TOTAL ->
-		h2s_chan[switch_id] ! MACPKTT, prt_mac_packet;
+		h2s_chan[switch_id] ! /* MACPKTT, */ prt_mac_packet;
 		interaction_cnt++;
 		if
-		::s2h_chan[switch_id].hosts[switch_port] ? MACPKTT, recv_mac_packet->
+		::s2h_chan[switch_id].hosts[switch_port] ? /* MACPKTT, */ recv_mac_packet->
 			if
 			::recv_mac_packet.dst == src->
 				printf("Host %d receive reply successfully\n", src);
@@ -299,13 +299,14 @@ int flowtable_entry_cnt = 0;
 chan action_exchange_chan = [1] of {ofp_action_header};
 chan header_fields_exchange_chan = [1] of {ofp_match};
 flowtable_entry flowtable[FLOWTABLE_ENTRY_NUM];
+dp_ofp_packet_in_t dp_ofp_packet_in;
 do
 
-	::h2s_chan[switch_id]?MACPKTT, prt_mac_packet ->
+	::h2s_chan[switch_id] ? /* MACPKTT,*/ prt_mac_packet ->
 process_pkt:
 		flowtable_entry_cnt = 0; 
 		do
-		::flowtable_entry_cnt < FLOWTABLE_ENTRY_NUM ->
+		::flowtable_entry_cnt < flowtable_entry_total ->
 			if
 			/* ::flowtable[flowtable_entry_cnt].wilcards 
 			*	goto apply_actions */
@@ -316,7 +317,7 @@ apply_actions:
 				flowtable[flowtable_entry_cnt].counter++;
 				if
 				::flowtable[flowtable_entry_cnt].action.type == OFPAT_OUTPUT->
-					s2h_chan[switch_id].hosts[flowtable[flowtable_entry_cnt].action.arg1] ! MACPKTT, prt_mac_packet.mac_packet
+					s2h_chan[switch_id].hosts[flowtable[flowtable_entry_cnt].action.arg1] ! /*MACPKTT,*/ prt_mac_packet.mac_packet
 				  	
 				fi;
 				break;
@@ -324,8 +325,7 @@ apply_actions:
 				flowtable_entry_cnt++;
 			fi;
 
-		::flowtable_entry_cnt>=FLOWTABLE_ENTRY_NUM->		/* not found in flowtable */
-			dp_ofp_packet_in_t dp_ofp_packet_in;
+		::flowtable_entry_cnt>=flowtable_entry_total ->		/* not found in flowtable */
 			dp_ofp_packet_in.dpid = switch_id;	/* use switch_id to indicate datapath id */
 								/*  this means switch_cnt in controller */
 			/* dp_ofp_packet_in.packet_in.mac_packet = prt_mac_packet.mac_packet; */
@@ -334,19 +334,19 @@ apply_actions:
 			dp_ofp_packet_in.packet_in.mac_packet.type = prt_mac_packet.mac_packet.type;
 			dp_ofp_packet_in.packet_in.packet_in_header.in_port = prt_mac_packet.port;
 		        dp_ofp_packet_in.packet_in.packet_in_header.reason = OFPR_NO_MATCH;
-			s2c_packet_in_chan ! OFPT_PACKET_IN, dp_ofp_packet_in;
+			s2c_packet_in_chan ! /* OFPT_PACKET_IN, */ dp_ofp_packet_in;
 			break;
 		 od; 
 
-	::c2s_packet_out_chan[switch_id]?OFPT_PACKET_OUT, dp_ofp_packet_out->
+	::c2s_packet_out_chan[switch_id]? /*OFPT_PACKET_OUT,*/ dp_ofp_packet_out->
 process_of_packet_out:
 		if
 		::dp_ofp_packet_out.packet_out.action.type ==  OFPAT_OUTPUT->
-			s2h_chan[switch_id].hosts[dp_ofp_packet_out.packet_out.action.arg1] ! MACPKTT,dp_ofp_packet_out.packet_out.mac_packet
+			s2h_chan[switch_id].hosts[dp_ofp_packet_out.packet_out.action.arg1] ! /* MACPKTT,*/ dp_ofp_packet_out.packet_out.mac_packet
 			
 		fi	
 
-	::c2s_flow_mod_chan[switch_id]?OFPT_FLOW_MOD, dp_ofp_flow_mod ->
+	::c2s_flow_mod_chan[switch_id] ? /*OFPT_FLOW_MOD,*/ dp_ofp_flow_mod ->
 		if
 		:: dp_ofp_flow_mod.flow_mod.flow_mod_header.command==OFPFC_ADD ->
 process_of_flow_mod:
@@ -393,7 +393,7 @@ dp_ofp_flow_mod_t dp_ofp_flow_mod;
 dp_ofp_packet_out_t dp_ofp_packet_out;
 packet_in:
 	do
-	:: s2c_packet_in_chan ? OFPT_PACKET_IN, dp_ofp_packet_in->
+	:: s2c_packet_in_chan ? /* OFPT_PACKET_IN, */ dp_ofp_packet_in->
 do_l2_learning:
 		mac_packet_exchange_chan ! dp_ofp_packet_in.packet_in.mac_packet;
 		mac_packet_exchange_chan ? mac_packet;
@@ -457,7 +457,7 @@ install_datapath_flow:
 				ofp_action_header_exchange_chan	! action;
 				ofp_action_header_exchange_chan ? dp_ofp_flow_mod.flow_mod.action;
 send_flow_command:
-				c2s_flow_mod_chan[switch_cnt] ! OFPT_FLOW_MOD, dp_ofp_flow_mod;
+				c2s_flow_mod_chan[switch_cnt] ! /* OFPT_FLOW_MOD,*/ dp_ofp_flow_mod;
 send_openflow_packet:
 send_openflow_packet_out:
 				dp_ofp_packet_out.dpid = switch_cnt;
@@ -469,7 +469,7 @@ send_openflow_packet_out:
 				ofp_action_header_exchange_chan	? dp_ofp_packet_out.packet_out.action;
 				dp_ofp_packet_out.packet_out.packet_out_header.in_port = packet_in_header.in_port;
 
-				c2s_packet_out_chan[switch_cnt] ! OFPT_PACKET_OUT, dp_ofp_packet_out;					
+				c2s_packet_out_chan[switch_cnt] ! /* OFPT_PACKET_OUT,*/ dp_ofp_packet_out;					
 			fi;
 		::else->
 send_openflow_OFPP_FLOOD:
