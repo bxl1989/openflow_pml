@@ -211,7 +211,7 @@ chan s2c_packet_in_chan = [QSIZE_SC ] of { /* mtype, */ byte, ofp_packet_in_t };
 		/* only packet_in is delivered in this application */
 chan h2s_chan[SWITCH_NUM] = [QSIZE_SH ] of { /* mtype, */ byte, mac_packet_t };
 typedef s2h_chan_t{
-	chan hosts[HOST_NUM] = [QSIZE_SH ] of { /* mtype, */ mac_packet_t }
+	chan ports[HOST_NUM] = [QSIZE_SH ] of { /* mtype, */ mac_packet_t }
 };
 s2h_chan_t s2h_chan[SWITCH_NUM];
 #define INTERACTION_TOTAL 4
@@ -219,24 +219,27 @@ proctype normal_host(byte src; byte dst; byte switch_id; byte switch_port){	/* h
 	mac_packet_t send_mac_packet;
 	mac_packet_t recv_mac_packet;
 	byte interaction_cnt;
-
+	atomic{
 	send_mac_packet.src = src;
 	send_mac_packet.dst = dst;
 	
 	interaction_cnt = 0;
+	};
 	do
 	::interaction_cnt < INTERACTION_TOTAL ->
+	atomic{
 		h2s_chan[switch_id] ! /* MACPKTT, */ switch_port, send_mac_packet;
 		interaction_cnt++;
+	};
 		if
-		::s2h_chan[switch_id].hosts[switch_port] ? /* MACPKTT, */ recv_mac_packet->
+		::s2h_chan[switch_id].ports[switch_port] ? /* MACPKTT, */ recv_mac_packet->
 			if
 			::recv_mac_packet.dst == src->
 				printf("Host %d receive reply successfully\n", src);
 			fi
-		::timeout->
+		/* ::timeout->
 			printf("Host %d not receive any reply\n", src);
-			break;
+			 break; */
 		fi
 	::interaction_cnt >= INTERACTION_TOTAL->
 		break
@@ -254,9 +257,15 @@ typedef flowtable_entry{
 	  		
 };
 #define FLOWTABLE_ENTRY_NUM 10
+
+typedef ports_used_ports{
+	bool ports[HOST_NUM];
+}
+ports_used_ports ports_used[SWITCH_NUM];
+
 proctype switch(byte switch_id){
 mac_packet_t  in_mac_packet;
-int in_port;
+byte in_port;
 ofp_packet_out_t ofp_packet_out;
 ofp_flow_mod_t ofp_flow_mod;
 byte flowtable_entry_total = 0;
@@ -265,11 +274,13 @@ chan action_exchange_chan = [1] of { ofp_action_header };
 chan header_fields_exchange_chan = [1] of { ofp_match };
 flowtable_entry flowtable[FLOWTABLE_ENTRY_NUM];
 ofp_packet_in_t ofp_packet_in;
+byte flood_port_cnt = 0;
 do
 
 	::h2s_chan[switch_id] ? /* MACPKTT,*/ in_port, in_mac_packet ->
 process_pkt:
-		flowtable_entry_cnt = 0; 
+		atomic{
+		flowtable_entry_cnt = 0;
 		do
 		::flowtable_entry_cnt < flowtable_entry_total ->
 			if
@@ -282,7 +293,7 @@ apply_actions:
 				flowtable[flowtable_entry_cnt].counter++;
 				if
 				::flowtable[flowtable_entry_cnt].action.type == OFPAT_OUTPUT->
-					s2h_chan[switch_id].hosts[flowtable[flowtable_entry_cnt].action.arg1] ! /*MACPKTT,*/ in_mac_packet
+					s2h_chan[switch_id].ports[flowtable[flowtable_entry_cnt].action.arg1] ! /*MACPKTT,*/ in_mac_packet
 				  	
 				fi;
 				break;
@@ -300,16 +311,33 @@ apply_actions:
 			s2c_packet_in_chan ! /* OFPT_PACKET_IN, */ switch_id, ofp_packet_in;
 			break;
 		 od; 
-
+		 };
 	::c2s_packet_out_chan[switch_id]? /*OFPT_PACKET_OUT,*/ ofp_packet_out->
 process_of_packet_out:
+		atomic{
 		if
-		::ofp_packet_out.action.type ==  OFPAT_OUTPUT->
-			
-			s2h_chan[switch_id].hosts[ofp_packet_out.action.arg1] ! /* MACPKTT,*/ ofp_packet_out.mac_packet		
-		fi	
+		::ofp_packet_out.action.type ==  OFPAT_OUTPUT ->
+			if
+			::ofp_packet_out.action.arg1 != OFPP_FLOOD ->
+				s2h_chan[switch_id].ports[ofp_packet_out.action.arg1] ! /* MACPKTT,*/ ofp_packet_out.mac_packet;
+			::ofp_packet_out.action.arg1 == OFPP_FLOOD ->
+				do
+				:: flood_port_cnt < HOST_NUM ->
+					if
+					::ports_used[switch_id].ports[flood_port_cnt]==true && flood_port_cnt != in_port ->
+						s2h_chan[switch_id].ports[flood_port_cnt] ! ofp_packet_out.mac_packet;
+					fi;
+					flood_port_cnt++;
+				:: flood_port_cnt >= HOST_NUM ->
+					break;
+				od
+				
+			fi		
+		fi
+		};	
 
 	::c2s_flow_mod_chan[switch_id] ? /*OFPT_FLOW_MOD,*/ ofp_flow_mod ->
+		atomic{
 		if
 		:: ofp_flow_mod.command==OFPFC_ADD ->
 process_of_flow_mod:
@@ -320,6 +348,7 @@ process_of_flow_mod:
 			header_fields_exchange_chan ? flowtable[flowtable_entry_total].header_fields; 
 			flowtable_entry_total++
 		fi
+		};
 /*
 	::c2s_port_flood_chan[switch_id]?OFPT_PORT_FLOOD, dp_ofp_port_flood -> 
 		skip
@@ -358,9 +387,11 @@ packet_in:
 	do
 	:: s2c_packet_in_chan ? /* OFPT_PACKET_IN, */ dpid, ofp_packet_in->
 do_l2_learning:
+		atomic{
 		mac_packet_exchange_chan ! ofp_packet_in.mac_packet;
 		mac_packet_exchange_chan ? mac_packet;
 		srcaddr = mac_packet.src;
+		
 		if
 		::srcaddr != BCAST_ADDR -> 
 			if
@@ -426,10 +457,17 @@ send_openflow_packet_out:
 			fi;
 		::else->
 send_openflow_OFPP_FLOOD:
-			skip		
-		fi
+			action.type = OFPAT_OUTPUT;
+			action.arg1 = OFPP_FLOOD;
+			mac_packet_exchange_chan ! mac_packet;
+			mac_packet_exchange_chan ? ofp_packet_out.mac_packet;
+			ofp_action_header_exchange_chan	! action;
+			ofp_action_header_exchange_chan	? ofp_packet_out.action;
+			ofp_packet_out.in_port = ofp_packet_in.in_port;
+			c2s_packet_out_chan[dpid] ! /* OFPT_PACKET_OUT,*/ ofp_packet_out;					
 
-			
+		fi
+		};		
 	od;
 datapath_leave:
 datapath_join:
@@ -437,6 +475,8 @@ timer:
 }
 
 init{
+	ports_used[0].ports[0] = true;
+	ports_used[0].ports[1] = true;
 	run controller();
 	run switch(0);
 	run normal_host(0, 1, 0, 0);
