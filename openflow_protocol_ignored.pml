@@ -665,4 +665,42 @@ typedef ofp_action_vendor_header {
     int vendor;                /* Vendor ID, which takes the same form
                                        as in "typedef ofp_vendor_header". */
 };
+/* enum ofp_flow_mod_flags { */
+#define    OFPFF_SEND_FLOW_REM = 1 << 0  /* Send flow removed message when flow
+      		                              * expires or is deleted. */
+#define    OFPFF_CHECK_OVERLAP = 1 << 1  /* Check for overlapping entries first. */
+#define    OFPFF_EMERG         = 1 << 2   /* Remark this is for emergency. */
+
+
+/* Flow wildcards. */
+/* enum ofp_flow_wildcards { */
+#define    OFPFW_IN_PORT   1 << 0  /* Switch input port. */
+#define    OFPFW_DL_VLAN   1 << 1  /* VLAN id. */
+#define    OFPFW_DL_SRC    1 << 2  /* Ethernet source address. */
+#define    OFPFW_DL_DST    1 << 3  /* Ethernet destination address. */
+#define    OFPFW_DL_TYPE   1 << 4  /* Ethernet frame type. */
+#define    OFPFW_NW_PROTO  1 << 5  /* IP protocol. */
+#define    OFPFW_TP_SRC    1 << 6  /* TCP/UDP source port. */
+#define    OFPFW_TP_DST    1 << 7  /* TCP/UDP destination port. */
+
+    /* IP source address wildcard bit count.  0 is exact match, 1 ignores the
+     * LSB, 2 ignores the 2 least-significant bits, ..., 32 and higher wildcard
+     * the entire field.  This is the *opposite* of the usual convention where
+     * e.g. /24 indicates that 8 bits (not 24 bits) are wildcarded. */
+#define    OFPFW_NW_SRC_SHIFT  8
+#define    OFPFW_NW_SRC_BITS  6
+#define    OFPFW_NW_SRC_MASK  ((1 << OFPFW_NW_SRC_BITS) - 1) << OFPFW_NW_SRC_SHIFT
+#define    OFPFW_NW_SRC_ALL  32 << OFPFW_NW_SRC_SHIFT
+
+    /* IP destination address wildcard bit count.  Same format as source. */
+#define    OFPFW_NW_DST_SHIFT  14
+#define    OFPFW_NW_DST_BITS  6
+#define    OFPFW_NW_DST_MASK  ((1 << OFPFW_NW_DST_BITS) - 1) << OFPFW_NW_DST_SHIFT,
+#define    OFPFW_NW_DST_ALL  32 << OFPFW_NW_DST_SHIFT,
+
+#define    OFPFW_DL_VLAN_PCP  1 << 20  /* VLAN priority. */
+#define    OFPFW_NW_TOS  1 << 21  /* IP ToS (DSCP field, 6 bits). */
+
+    /* Wildcard all fields. */
+#define    OFPFW_ALL  ((1 << 22) - 1)
 
