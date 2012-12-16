@@ -46,7 +46,7 @@ typedef mac_packet_t{
 	byte dst;	/* Ethernet dst address */
 };
 
-#define OFPP_FLOOD 255
+#define OFPP_FLOOD 127
 
 /* Why is this packet being sent to the controller? */
 /* enum ofp_packet_in_reason */
@@ -109,7 +109,7 @@ typedef ofp_flow_mod_t{
 
 #define SWITCH_NUM 1
 #define HOST_NUM 2
-#define BCAST_ADDR 255
+#define BCAST_ADDR 127
 #define QSIZE_SC 10
 #define QSIZE_SH 10 
 
@@ -162,6 +162,67 @@ proctype send_host(byte src; byte dst; byte switch_id; byte switch_port){	/* hos
 	od;
 	h2s_end_msg_chan[switch_id] ! switch_port;
 };
+proctype moving_send_host(byte src; byte dst; byte switch_id; byte orig_switch_port, byte moved_switch_port){	/* host source addr should be the same as its switch_port */
+	mac_packet_t send_mac_packet;
+	mac_packet_t recv_mac_packet;
+	byte interaction_cnt;
+	atomic{
+	send_mac_packet.src = src;
+	send_mac_packet.dst = dst;
+	
+	interaction_cnt = 0;
+	};
+	do
+	::interaction_cnt < INTERACTION_TOTAL ->
+	atomic{
+		h2s_chan[switch_id] ! orig_switch_port, send_mac_packet;
+		interaction_cnt++;
+	};
+		do
+		::s2h_chan[switch_id].ports[switch_port] ? recv_mac_packet->
+			atomic{
+			if
+			::recv_mac_packet.dst == src->
+				printf("Host %d receive reply successfully\n", src);
+				break;
+			::recv_mac_packet.dst != src->
+				skip;
+			fi
+			};
+		 ::timeout->
+			printf("Host %d not receive any reply\n", src);
+			assert(false);
+		od
+	::interaction_cnt >= INTERACTION_TOTAL->
+		break
+	od;
+	interaction_cnt = 0;
+	do
+	::interaction_cnt < INTERACTION_TOTAL ->
+	atomic{
+		h2s_chan[switch_id] ! moved_switch_port, send_mac_packet;
+		interaction_cnt++;
+	};
+		do
+		::s2h_chan[switch_id].ports[switch_port] ? recv_mac_packet->
+			atomic{
+			if
+			::recv_mac_packet.dst == src->
+				printf("Host %d receive reply successfully\n", src);
+				break;
+			::recv_mac_packet.dst != src->
+				skip;
+			fi
+			};
+		 ::timeout->
+			printf("Host %d not receive any reply\n", src);
+			assert(false);
+		od
+	::interaction_cnt >= INTERACTION_TOTAL->
+		break
+	od;
+	h2s_end_msg_chan[switch_id] ! switch_port;
+};
 proctype recv_host(byte src; byte switch_id; byte switch_port){
 	mac_packet_t send_mac_packet;
 	mac_packet_t recv_mac_packet;
@@ -177,8 +238,7 @@ proctype recv_host(byte src; byte switch_id; byte switch_port){
 		fi
 	
 	::timeout->
-		break;
-		
+		assert(false);	
 	od;
 	h2s_end_msg_chan[switch_id] ! switch_port;
 };
@@ -383,9 +443,9 @@ forward_l2_packet:
 			:: prt != ofp_packet_in.in_port ->
 install_datapath_flow:
 				/* flow */
-				match.dl_src = mac_packet.src;
-				match.dl_dst = mac_packet.dst;
-				match.in_port =  ofp_packet_in.in_port;
+				ofp_flow_mod.match.dl_src = mac_packet.src;
+				ofp_flow_mod.match.dl_dst = mac_packet.dst;
+				ofp_flow_mod.match.in_port =  ofp_packet_in.in_port;
 		       		/* actions */
 				action.type = OFPAT_OUTPUT;
 				action.arg1 = prt;
@@ -421,7 +481,7 @@ send_openflow_OFPP_FLOOD:
 
 		fi
 		};
-/*
+
    ::s2c_end_msg_chan ? end_msg ->
 datapath_leave:
 		switch_used_total --;
@@ -429,7 +489,7 @@ datapath_leave:
 		::switch_used_total == 0->break
 		::switch_used_total != 0->skip
 		fi
-		*/
+		
 	od;
 
 datapath_join:
