@@ -704,3 +704,97 @@ typedef ofp_action_vendor_header {
     /* Wildcard all fields. */
 #define    OFPFW_ALL  ((1 << 22) - 1)
 
+
+typedef dp_ofp_packet_in_t{
+	byte dpid;
+	ofp_packet_in_t packet_in
+};
+typedef dp_ofp_packet_out_t{
+	byte dpid;
+	ofp_packet_out_t packet_out
+};
+typedef dp_ofp_flow_mod_t{
+	byte dpid;
+	ofp_flow_mod_t flow_mod
+};
+typedef dp_ofp_port_flood_t{
+	byte dpid;
+	/* ofp_port_flood_t port_flood */
+};
+typedef prt_mac_packet_t{
+	byte port;
+	mac_packet_t mac_packet
+};
+
+#define OFP_DEFAULT_PRIORITY 0
+
+typedef ofp_flow_mod_header {
+    ofp_match match;      /* Fields to match */
+    /* uint64_t cookie;              Opaque controller-issued identifier. */
+
+    /* Flow actions. */
+    byte command;             /* One of OFPFC_*. */
+/*    byte idle_timeout;         Idle time before discarding (seconds). */
+/*    byte hard_timeout;         Max time before discarding (seconds). */
+/*    byte pri;             Priority level of flow entry. */
+/*    byte buffer_id;            Buffered packet to apply to (or -1).
+                                     Not meaningful for OFPFC_DELETE*. */
+/*    byte out_port;             For OFPFC_DELETE* commands, require
+                                     matching entries to include this as an
+                                     output port.  A value of OFPP_NONE
+                                     indicates no restriction. */
+/*    byte flags;                One of OFPFF_*. */
+    /* ofp_action_header actions[0];  The action lengthgth is inferred
+                                            from the lengthgth field in the
+                                            header. */
+};
+typedef ofp_match {
+/*    byte wildcards;         Wildcard fields. */
+    byte in_port;          /* Input switch port. */
+    byte dl_src; /* Ethernet source address. */
+    byte dl_dst; /* Ethernet destination address. */
+/*    byte dl_vlan;           Input VLAN id. */
+/*    byte dl_vlan_pcp;        Input VLAN priority. */
+    byte dl_type;          /* Ethernet frame type. */
+/*    byte nw_tos;             IP ToS (actually DSCP field, 6 bits). */
+/*    byte nw_proto;           IP protocol or lower 8 bits of
+                                * ARP opcode. */
+/*    byte nw_src;            IP source address. */
+/*    byte nw_dst;            IP destination address. */
+/*    byte tp_src;            TCP/UDP source port. */
+/*    byte tp_dst;            TCP/UDP destination port. */
+};
+typedef ofp_packet_out_header {
+/*    byte buffer_id;            ID assigned by datapath (-1 if none). */
+    byte in_port;             /* Packet's input port (OFPP_NONE if none). */
+/*    byte actions_length;          Size of action array in bytes. */
+    /* ofp_action_header actions[0];  Actions. */
+    /* byte data[0]; */        /* Packet data.  The lengthgth is inferred
+                                     from the lengthgth field in the header.
+                                     (Only meaningful if buffer_id == -1.) */
+};
+typedef ofp_action_header {
+    byte type;                  /* One of OFPAT_*. */
+/*    byte length;                    Length of action, including this
+                                       header.  This is the lengthgth of action,
+                                       including any padding to make it
+                                       64-bit aligned. */
+    byte arg1;			/* output:port */
+/*    byte arg2			 output:max_length */
+};
+/* Action header that is common to all actions.  The lengthgth includes the
+ * header and any padding used to make the action 64-bit aligned.
+ * NB: The lengthgth of an action *must* always be a multiple of eight. */
+typedef ofp_packet_in_header {
+/*    byte buffer_id;      ID assigned by datapath. */
+/*    byte total_length;      Full lengthgth of frame. */
+    byte in_port;       /* Port on which frame was received. */
+/*    byte reason;          Reason packet is being sent (one of OFPR_*) */
+/*    byte data[0]         Ethernet frame, halfway through 32-bit word,
+                               so the IP header is 32-bit aligned.  The
+                               amount of data is inferred from the lengthgth
+                               field in the header.  Because of padding,
+                               offsetof(typedef ofp_packet_in, data) ==
+                               sizeof(typedef ofp_packet_in) - 2. */
+};
+
