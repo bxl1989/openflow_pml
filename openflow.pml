@@ -123,6 +123,8 @@ typedef s2h_chan_t{
 	chan ports[HOST_NUM] = [QSIZE_SH ] of { mac_packet_t }
 };
 s2h_chan_t s2h_chan[SWITCH_NUM];
+chan h2s_end_msg_chan [SWITCH_NUM] = [HOST_NUM] of {byte};
+chan s2c_end_msg_chan = [SWITCH_NUM] of {byte};
 #define INTERACTION_TOTAL 4
 proctype send_host(byte src; byte dst; byte switch_id; byte switch_port){	/* host source addr should be the same as its switch_port */
 	mac_packet_t send_mac_packet;
@@ -151,13 +153,14 @@ proctype send_host(byte src; byte dst; byte switch_id; byte switch_port){	/* hos
 				skip;
 			fi
 			};
-		/* ::timeout->
+		 ::timeout->
 			printf("Host %d not receive any reply\n", src);
-			 break; */
+			 break; 
 		od
 	::interaction_cnt >= INTERACTION_TOTAL->
 		break
 	od;
+	h2s_end_msg_chan[switch_id] ! switch_port;
 };
 proctype recv_host(byte src; byte switch_id; byte switch_port){
 	mac_packet_t send_mac_packet;
@@ -172,11 +175,12 @@ proctype recv_host(byte src; byte switch_id; byte switch_port){
 		::recv_mac_packet.dst != src->
 			skip;
 		fi
-	/*
+	
 	::timeout->
 		break;
-	*/	
-	od
+		
+	od;
+	h2s_end_msg_chan[switch_id] ! switch_port;
 };
 typedef flowtable_entry{
 	ofp_match header_fields;
@@ -194,6 +198,7 @@ typedef ports_used_ports{
 	bool ports[HOST_NUM];
 }
 ports_used_ports ports_used[SWITCH_NUM];
+byte ports_used_total[SWITCH_NUM];
 
 proctype switch(byte switch_id){
 mac_packet_t  in_mac_packet;
@@ -206,9 +211,17 @@ chan action_exchange_chan = [1] of { ofp_action_header };
 chan header_fields_exchange_chan = [1] of { ofp_match };
 flowtable_entry flowtable[FLOWTABLE_ENTRY_NUM];
 ofp_packet_in_t ofp_packet_in;
+byte end_msg;
 byte flood_port_cnt = 0;
 do
-
+	::h2s_end_msg_chan[switch_id] ? end_msg->
+		ports_used_total[switch_id] --;
+		if
+		::ports_used_total[switch_id]==0->
+			s2c_end_msg_chan ! switch_id;
+			break;
+		::ports_used_total[switch_id]!=0->skip
+		fi
 	::h2s_chan[switch_id] ?  in_port, in_mac_packet ->
 process_pkt:
 		atomic{
@@ -223,7 +236,7 @@ apply_actions:
 				flowtable[flowtable_entry_cnt].counter++;
 				if
 				::flowtable[flowtable_entry_cnt].action.type == OFPAT_OUTPUT->
-					s2h_chan[switch_id].ports[flowtable[flowtable_entry_cnt].action.arg1] !  in_mac_packet
+					s2h_chan[switch_id].ports[flowtable[flowtable_entry_cnt].action.arg1] !  in_mac_packet;
 					break
 				::else->
 					skip	
@@ -241,6 +254,22 @@ apply_actions:
 			break;
 		 od; 
 		 };
+	::c2s_flow_mod_chan[switch_id] ? /*OFPT_FLOW_MOD,*/ ofp_flow_mod ->
+		atomic{
+		if
+		:: ofp_flow_mod.command==OFPFC_ADD ->
+process_of_flow_mod:
+			flowtable[flowtable_entry_total].counter = 0;
+			action_exchange_chan ! ofp_flow_mod.action;
+			action_exchange_chan ? flowtable[flowtable_entry_total].action;
+			header_fields_exchange_chan ! ofp_flow_mod.match;
+			header_fields_exchange_chan ? flowtable[flowtable_entry_total].header_fields; 
+			flowtable_entry_total++;
+		::else->
+			skip
+		fi
+		};
+
 	::c2s_packet_out_chan[switch_id]? ofp_packet_out->
 process_of_packet_out:
 		atomic{
@@ -269,25 +298,12 @@ process_of_packet_out:
 		fi
 		};	
 
-	::c2s_flow_mod_chan[switch_id] ? /*OFPT_FLOW_MOD,*/ ofp_flow_mod ->
-		atomic{
-		if
-		:: ofp_flow_mod.command==OFPFC_ADD ->
-process_of_flow_mod:
-			flowtable[flowtable_entry_total].counter = 0;
-			action_exchange_chan ! ofp_flow_mod.action;
-			action_exchange_chan ? flowtable[flowtable_entry_total].action;
-			header_fields_exchange_chan ! ofp_flow_mod.match;
-			header_fields_exchange_chan ? flowtable[flowtable_entry_total].header_fields; 
-			flowtable_entry_total++;
-		::else->
-			skip
-		fi
-		};
+;
 
 od
 };
 
+byte switch_used_total;
 typedef mactable_entry {
 	bool used;
 	byte in_port;
@@ -314,6 +330,8 @@ ofp_action_header action;
 chan ofp_action_header_exchange_chan = [1] of { ofp_action_header  };
 ofp_flow_mod_t ofp_flow_mod;
 ofp_packet_out_t ofp_packet_out;
+
+byte end_msg;
 
 packet_in:
 	do
@@ -402,9 +420,18 @@ send_openflow_OFPP_FLOOD:
 			c2s_packet_out_chan[dpid] ! /* OFPT_PACKET_OUT,*/ ofp_packet_out;					
 
 		fi
-		};		
-	od;
+		};
+/*
+   ::s2c_end_msg_chan ? end_msg ->
 datapath_leave:
+		switch_used_total --;
+		if
+		::switch_used_total == 0->break
+		::switch_used_total != 0->skip
+		fi
+		*/
+	od;
+
 datapath_join:
 timer:
 }
@@ -412,6 +439,8 @@ timer:
 init{
 	ports_used[0].ports[0] = true;
 	ports_used[0].ports[1] = true;
+	ports_used_total[0] = 2;
+	switch_used_total = 1;
 	run controller();
 	run switch(0);
 	run send_host(0, 1, 0, 0);

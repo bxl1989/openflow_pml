@@ -42,9 +42,16 @@ proctype B(int id){
 	od
 	
 }
-
+chan c = [10] of {byte};
+proctype C(){
+	byte x;
+	do
+	::c?x->skip
+	od
+}
 init{
 	
 	run A(0);
 	run B(0);
+	run C();
 }
