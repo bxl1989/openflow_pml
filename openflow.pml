@@ -44,8 +44,13 @@ mtype = {
 typedef mac_packet_t{
 	byte src;	/* Ethernet src address */
 	byte dst;	/* Ethernet dst address */
+/*	byte type;	 simplified interaction type: MACT_START|MACT_DURE|MACT_END */
 };
-
+mtype = {
+	MACT_START,
+	MACT_DURE,
+	MACT_END
+};
 #define OFPP_FLOOD 127
 
 /* Why is this packet being sent to the controller? */
@@ -108,7 +113,7 @@ typedef ofp_flow_mod_t{
 };
 
 #define SWITCH_NUM 1
-#define HOST_NUM 2
+#define HOST_NUM 3
 #define BCAST_ADDR 127
 #define QSIZE_SC 10
 #define QSIZE_SH 10 
@@ -125,6 +130,10 @@ typedef s2h_chan_t{
 s2h_chan_t s2h_chan[SWITCH_NUM];
 chan h2s_end_msg_chan [SWITCH_NUM] = [HOST_NUM] of {byte};
 chan s2c_end_msg_chan = [SWITCH_NUM] of {byte};
+typedef s2r{
+	chan recver[HOST_NUM] = [0] of byte;
+};
+s2r sender2recver_end_msg_chan [HOST_NUM];
 #define INTERACTION_TOTAL 4
 proctype send_host(byte src; byte dst; byte switch_id; byte switch_port){	/* host source addr should be the same as its switch_port */
 	mac_packet_t send_mac_packet;
@@ -136,9 +145,15 @@ proctype send_host(byte src; byte dst; byte switch_id; byte switch_port){	/* hos
 	
 	interaction_cnt = 0;
 	};
-	do
+	do		
 	::interaction_cnt < INTERACTION_TOTAL ->
 	atomic{
+/*	if
+	::interaction_cnt == 0 -> send_mac_packet.type =MACT_START;
+	::interaction_cnt ==INTERACTION_TOTAL-1 -> send_mac_packet.type = MACT_END;
+	::else -> send_mac_packet.type = MACT_DURE;
+	fi;
+*/
 		h2s_chan[switch_id] ! switch_port, send_mac_packet;
 		interaction_cnt++;
 	};
@@ -162,7 +177,7 @@ proctype send_host(byte src; byte dst; byte switch_id; byte switch_port){	/* hos
 	od;
 	h2s_end_msg_chan[switch_id] ! switch_port;
 };
-proctype moving_send_host(byte src; byte dst; byte switch_id; byte orig_switch_port, byte moved_switch_port){	/* host source addr should be the same as its switch_port */
+proctype moving_send_host(byte src; byte dst; byte switch_id; byte orig_switch_port; byte moved_switch_port){	/* host source addr should be the same as its switch_port */
 	mac_packet_t send_mac_packet;
 	mac_packet_t recv_mac_packet;
 	byte interaction_cnt;
@@ -175,11 +190,17 @@ proctype moving_send_host(byte src; byte dst; byte switch_id; byte orig_switch_p
 	do
 	::interaction_cnt < INTERACTION_TOTAL ->
 	atomic{
+/*
+	if
+	::interaction_cnt == 0 -> send_mac_packet.type = MACT_START;
+	::else -> send_mac_packet.type = MACT_DURE;
+	fi;
+*/
 		h2s_chan[switch_id] ! orig_switch_port, send_mac_packet;
 		interaction_cnt++;
 	};
 		do
-		::s2h_chan[switch_id].ports[switch_port] ? recv_mac_packet->
+		::s2h_chan[switch_id].ports[orig_switch_port] ? recv_mac_packet->
 			atomic{
 			if
 			::recv_mac_packet.dst == src->
@@ -200,11 +221,18 @@ proctype moving_send_host(byte src; byte dst; byte switch_id; byte orig_switch_p
 	do
 	::interaction_cnt < INTERACTION_TOTAL ->
 	atomic{
-		h2s_chan[switch_id] ! moved_switch_port, send_mac_packet;
+/*
+	if
+	::interaction_cnt == 0 -> send_mac_packet.type =MACT_START;
+	::interaction_cnt == INTERACTION_TOTAL-1 -> send_mac_packet.type = MACT_END;
+	::else -> send_mac_packet.type = MACT_DURE;
+	fi;
+*/
+		h2s_chan[switch_id] ! orig_switch_port, send_mac_packet;
 		interaction_cnt++;
 	};
 		do
-		::s2h_chan[switch_id].ports[switch_port] ? recv_mac_packet->
+		::s2h_chan[switch_id].ports[orig_switch_port] ? recv_mac_packet->
 			atomic{
 			if
 			::recv_mac_packet.dst == src->
@@ -221,8 +249,11 @@ proctype moving_send_host(byte src; byte dst; byte switch_id; byte orig_switch_p
 	::interaction_cnt >= INTERACTION_TOTAL->
 		break
 	od;
-	h2s_end_msg_chan[switch_id] ! switch_port;
+	h2s_end_msg_chan[switch_id] ! orig_switch_port;
+	/* h2s_end_msg_chan[switch_id] ! moved_switch_port; */
 };
+
+byte ports_used_total[SWITCH_NUM];
 proctype recv_host(byte src; byte switch_id; byte switch_port){
 	mac_packet_t send_mac_packet;
 	mac_packet_t recv_mac_packet;
@@ -235,11 +266,18 @@ proctype recv_host(byte src; byte switch_id; byte switch_port){
 			h2s_chan[switch_id] ! switch_port, send_mac_packet;
 		::recv_mac_packet.dst != src->
 			skip;
-		fi
-	
+		fi;
+		/*
+		if
+		::recv_mac_packet.type == MACT_END->goto recv_host_end;
+		::recv_mac_packet.type != MACT_END->skip;
+		fi;
+		*/
+	::	
 	::timeout->
 		assert(false);	
 	od;
+recv_host_end:
 	h2s_end_msg_chan[switch_id] ! switch_port;
 };
 typedef flowtable_entry{
@@ -258,7 +296,6 @@ typedef ports_used_ports{
 	bool ports[HOST_NUM];
 }
 ports_used_ports ports_used[SWITCH_NUM];
-byte ports_used_total[SWITCH_NUM];
 
 proctype switch(byte switch_id){
 mac_packet_t  in_mac_packet;
@@ -309,6 +346,7 @@ apply_actions:
 		::flowtable_entry_cnt>=flowtable_entry_total ->		/* not found in flowtable */
 			ofp_packet_in.mac_packet.src = in_mac_packet.src;
 			ofp_packet_in.mac_packet.dst = in_mac_packet.dst;
+/*			ofp_packet_in.mac_packet.type = in_mac_packet.type; */
 			ofp_packet_in.in_port = in_port;
 			s2c_packet_in_chan !  switch_id, ofp_packet_in;
 			break;
@@ -499,10 +537,11 @@ timer:
 init{
 	ports_used[0].ports[0] = true;
 	ports_used[0].ports[1] = true;
+	/* ports_used[0].ports[2] = true; */
 	ports_used_total[0] = 2;
 	switch_used_total = 1;
 	run controller();
 	run switch(0);
-	run send_host(0, 1, 0, 0);
+	run moving_send_host(0, 1, 0, 0, 2);
 	run recv_host(1, 0, 1);
 }
