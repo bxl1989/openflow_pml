@@ -44,7 +44,7 @@ mtype = {
 typedef mac_packet_t{
 	byte src;	/* Ethernet src address */
 	byte dst;	/* Ethernet dst address */
-/*	byte type;	 simplified interaction type: MACT_START|MACT_DURE|MACT_END */
+	byte type;	/* simplified interaction type: MACT_START|MACT_DURE|MACT_END */
 };
 mtype = {
 	MACT_START,
@@ -111,18 +111,28 @@ typedef ofp_flow_mod_t{
 	byte command;
 	ofp_action_header action
 };
-
+typedef ofp_c2s_msg_t {
+	ofp_packet_out_t ofp_packet_out;
+	ofp_flow_mod_t ofp_flow_mod;
+};
+typedef ofp_asyn_msg_t {
+	ofp_packet_in_t ofp_packet_in;
+};
 #define SWITCH_NUM 1
 #define HOST_NUM 3
 #define BCAST_ADDR 127
 #define QSIZE_SC 10
 #define QSIZE_SH 10 
 
-chan c2s_packet_out_chan[SWITCH_NUM] = [QSIZE_SC ] of {  ofp_packet_out_t }; 
+/* chan c2s_packet_out_chan[SWITCH_NUM] = [QSIZE_SC ] of {  ofp_packet_out_t };  */
 		/* packet_out */
-chan c2s_flow_mod_chan[SWITCH_NUM] = [QSIZE_SC ] of {  ofp_flow_mod_t }; 
+/* chan c2s_flow_mod_chan[SWITCH_NUM] = [QSIZE_SC ] of {  ofp_flow_mod_t };  */
 		/* flow mod */
-chan s2c_packet_in_chan = [QSIZE_SC ] of {  byte, ofp_packet_in_t }; 
+/* chan s2c_packet_in_chan = [QSIZE_SC ] of {  byte, ofp_packet_in_t }; */
+
+chan s2c_asyn_msg_chan = [QSIZE_SC] of { byte, mtype, ofp_asyn_msg_t }
+chan c2s_msg_chan[SWITCH_NUM] = [QSIZE_SC] of { mtype, ofp_c2s_msg_t };
+
 chan h2s_chan[SWITCH_NUM] = [QSIZE_SH ] of { byte, mac_packet_t };
 typedef s2h_chan_t{
 	chan ports[HOST_NUM] = [QSIZE_SH ] of { mac_packet_t }
@@ -130,15 +140,12 @@ typedef s2h_chan_t{
 s2h_chan_t s2h_chan[SWITCH_NUM];
 chan h2s_end_msg_chan [SWITCH_NUM] = [HOST_NUM] of {byte};
 chan s2c_end_msg_chan = [SWITCH_NUM] of {byte};
-typedef s2r{
-	chan recver[HOST_NUM] = [0] of byte;
-};
-s2r sender2recver_end_msg_chan [HOST_NUM];
+chan sender2recver_end_msg_chan = [0] of {byte};
 #define INTERACTION_TOTAL 4
+byte interaction_cnt;
 proctype send_host(byte src; byte dst; byte switch_id; byte switch_port){	/* host source addr should be the same as its switch_port */
 	mac_packet_t send_mac_packet;
 	mac_packet_t recv_mac_packet;
-	byte interaction_cnt;
 	atomic{
 	send_mac_packet.src = src;
 	send_mac_packet.dst = dst;
@@ -146,14 +153,14 @@ proctype send_host(byte src; byte dst; byte switch_id; byte switch_port){	/* hos
 	interaction_cnt = 0;
 	};
 	do		
-	::interaction_cnt < INTERACTION_TOTAL ->
+	::interaction_cnt < INTERACTION_TOTAL*2 ->
 	atomic{
-/*	if
+	if
 	::interaction_cnt == 0 -> send_mac_packet.type =MACT_START;
-	::interaction_cnt ==INTERACTION_TOTAL-1 -> send_mac_packet.type = MACT_END;
+	::interaction_cnt ==INTERACTION_TOTAL*2-1 -> send_mac_packet.type = MACT_END;
 	::else -> send_mac_packet.type = MACT_DURE;
 	fi;
-*/
+
 		h2s_chan[switch_id] ! switch_port, send_mac_packet;
 		interaction_cnt++;
 	};
@@ -168,11 +175,12 @@ proctype send_host(byte src; byte dst; byte switch_id; byte switch_port){	/* hos
 				skip;
 			fi
 			};
+		
 		 ::timeout->
 			printf("Host %d not receive any reply\n", src);
-			 break; 
+			assert(false); 
 		od
-	::interaction_cnt >= INTERACTION_TOTAL->
+	::interaction_cnt >= INTERACTION_TOTAL*2->
 		break
 	od;
 	h2s_end_msg_chan[switch_id] ! switch_port;
@@ -180,7 +188,6 @@ proctype send_host(byte src; byte dst; byte switch_id; byte switch_port){	/* hos
 proctype moving_send_host(byte src; byte dst; byte switch_id; byte orig_switch_port; byte moved_switch_port){	/* host source addr should be the same as its switch_port */
 	mac_packet_t send_mac_packet;
 	mac_packet_t recv_mac_packet;
-	byte interaction_cnt;
 	atomic{
 	send_mac_packet.src = src;
 	send_mac_packet.dst = dst;
@@ -190,12 +197,10 @@ proctype moving_send_host(byte src; byte dst; byte switch_id; byte orig_switch_p
 	do
 	::interaction_cnt < INTERACTION_TOTAL ->
 	atomic{
-/*
 	if
 	::interaction_cnt == 0 -> send_mac_packet.type = MACT_START;
 	::else -> send_mac_packet.type = MACT_DURE;
 	fi;
-*/
 		h2s_chan[switch_id] ! orig_switch_port, send_mac_packet;
 		interaction_cnt++;
 	};
@@ -221,18 +226,16 @@ proctype moving_send_host(byte src; byte dst; byte switch_id; byte orig_switch_p
 	do
 	::interaction_cnt < INTERACTION_TOTAL ->
 	atomic{
-/*
 	if
 	::interaction_cnt == 0 -> send_mac_packet.type =MACT_START;
 	::interaction_cnt == INTERACTION_TOTAL-1 -> send_mac_packet.type = MACT_END;
 	::else -> send_mac_packet.type = MACT_DURE;
 	fi;
-*/
-		h2s_chan[switch_id] ! orig_switch_port, send_mac_packet;
+		h2s_chan[switch_id] ! moved_switch_port, send_mac_packet;
 		interaction_cnt++;
 	};
 		do
-		::s2h_chan[switch_id].ports[orig_switch_port] ? recv_mac_packet->
+		::s2h_chan[switch_id].ports[moved_switch_port] ? recv_mac_packet->
 			atomic{
 			if
 			::recv_mac_packet.dst == src->
@@ -250,7 +253,7 @@ proctype moving_send_host(byte src; byte dst; byte switch_id; byte orig_switch_p
 		break
 	od;
 	h2s_end_msg_chan[switch_id] ! orig_switch_port;
-	/* h2s_end_msg_chan[switch_id] ! moved_switch_port; */
+	h2s_end_msg_chan[switch_id] ! moved_switch_port;
 };
 
 byte ports_used_total[SWITCH_NUM];
@@ -259,6 +262,7 @@ proctype recv_host(byte src; byte switch_id; byte switch_port){
 	mac_packet_t recv_mac_packet;
 	do
 	::s2h_chan[switch_id].ports[switch_port] ? recv_mac_packet ->
+		atomic{
 		if
 		::recv_mac_packet.dst == src->
 			send_mac_packet.src = src;
@@ -267,15 +271,15 @@ proctype recv_host(byte src; byte switch_id; byte switch_port){
 		::recv_mac_packet.dst != src->
 			skip;
 		fi;
-		/*
 		if
-		::recv_mac_packet.type == MACT_END->goto recv_host_end;
+		::recv_mac_packet.type == MACT_END->break;
 		::recv_mac_packet.type != MACT_END->skip;
 		fi;
-		*/
-	::	
+		};
+	
 	::timeout->
 		assert(false);	
+	
 	od;
 recv_host_end:
 	h2s_end_msg_chan[switch_id] ! switch_port;
@@ -300,16 +304,16 @@ ports_used_ports ports_used[SWITCH_NUM];
 proctype switch(byte switch_id){
 mac_packet_t  in_mac_packet;
 byte in_port;
-ofp_packet_out_t ofp_packet_out;
-ofp_flow_mod_t ofp_flow_mod;
+ofp_c2s_msg_t ofp_c2s_msg;
 byte flowtable_entry_total = 0;
 byte flowtable_entry_cnt = 0;
 chan action_exchange_chan = [1] of { ofp_action_header };
 chan header_fields_exchange_chan = [1] of { ofp_match };
 flowtable_entry flowtable[FLOWTABLE_ENTRY_NUM];
-ofp_packet_in_t ofp_packet_in;
+ofp_asyn_msg_t ofp_asyn_msg;
 byte end_msg;
 byte flood_port_cnt = 0;
+mtype ofp_type;
 do
 	::h2s_end_msg_chan[switch_id] ? end_msg->
 		ports_used_total[switch_id] --;
@@ -344,59 +348,60 @@ apply_actions:
 			fi;
 
 		::flowtable_entry_cnt>=flowtable_entry_total ->		/* not found in flowtable */
-			ofp_packet_in.mac_packet.src = in_mac_packet.src;
-			ofp_packet_in.mac_packet.dst = in_mac_packet.dst;
-/*			ofp_packet_in.mac_packet.type = in_mac_packet.type; */
-			ofp_packet_in.in_port = in_port;
-			s2c_packet_in_chan !  switch_id, ofp_packet_in;
+			ofp_asyn_msg.ofp_packet_in.mac_packet.src = in_mac_packet.src;
+			ofp_asyn_msg.ofp_packet_in.mac_packet.dst = in_mac_packet.dst;
+			 ofp_asyn_msg.ofp_packet_in.mac_packet.type = in_mac_packet.type; 
+			ofp_asyn_msg.ofp_packet_in.in_port = in_port;
+			s2c_asyn_msg_chan !  switch_id, OFPT_PACKET_IN, ofp_asyn_msg;
 			break;
 		 od; 
 		 };
-	::c2s_flow_mod_chan[switch_id] ? /*OFPT_FLOW_MOD,*/ ofp_flow_mod ->
-		atomic{
+	::c2s_msg_chan[switch_id] ? ofp_type,  ofp_c2s_msg ->
 		if
-		:: ofp_flow_mod.command==OFPFC_ADD ->
-process_of_flow_mod:
-			flowtable[flowtable_entry_total].counter = 0;
-			action_exchange_chan ! ofp_flow_mod.action;
-			action_exchange_chan ? flowtable[flowtable_entry_total].action;
-			header_fields_exchange_chan ! ofp_flow_mod.match;
-			header_fields_exchange_chan ? flowtable[flowtable_entry_total].header_fields; 
-			flowtable_entry_total++;
-		::else->
-			skip
-		fi
-		};
-
-	::c2s_packet_out_chan[switch_id]? ofp_packet_out->
-process_of_packet_out:
-		atomic{
-		if
-		::ofp_packet_out.action.type ==  OFPAT_OUTPUT ->
+		::ofp_type == OFPT_FLOW_MOD ->
+			atomic{
 			if
-			::ofp_packet_out.action.arg1 != OFPP_FLOOD ->
-				s2h_chan[switch_id].ports[ofp_packet_out.action.arg1] ! ofp_packet_out.mac_packet;
-			::ofp_packet_out.action.arg1 == OFPP_FLOOD ->
-				do
-				:: flood_port_cnt < HOST_NUM ->
-					if
-					::ports_used[switch_id].ports[flood_port_cnt]==true && flood_port_cnt != ofp_packet_out.in_port ->
-						s2h_chan[switch_id].ports[flood_port_cnt] ! ofp_packet_out.mac_packet;
-					::else->
-						skip;
-					fi;
-					flood_port_cnt++;
-				:: flood_port_cnt >= HOST_NUM ->
-					break;
-				od
-				
+			::  ofp_c2s_msg.ofp_flow_mod.command==OFPFC_ADD ->
+process_of_flow_mod:
+				flowtable[flowtable_entry_total].counter = 0;
+				action_exchange_chan ! ofp_c2s_msg.ofp_flow_mod.action;
+				action_exchange_chan ? flowtable[flowtable_entry_total].action;
+				header_fields_exchange_chan ! ofp_c2s_msg.ofp_flow_mod.match;
+				header_fields_exchange_chan ? flowtable[flowtable_entry_total].header_fields; 
+				flowtable_entry_total++;
+			::else->
+				skip
 			fi
-		::else->
-			skip		
-		fi
-		};	
+			};
 
-;
+		::ofp_type == OFPT_PACKET_OUT ->
+process_of_packet_out:
+			atomic{
+			if
+			:: ofp_c2s_msg.ofp_packet_out.action.type ==  OFPAT_OUTPUT ->
+				if
+				:: ofp_c2s_msg.ofp_packet_out.action.arg1 != OFPP_FLOOD ->
+					s2h_chan[switch_id].ports[ ofp_c2s_msg.ofp_packet_out.action.arg1] !  ofp_c2s_msg.ofp_packet_out.mac_packet;
+				:: ofp_c2s_msg.ofp_packet_out.action.arg1 == OFPP_FLOOD ->
+					do
+					:: flood_port_cnt < HOST_NUM ->
+						if
+						::ports_used[switch_id].ports[flood_port_cnt]==true && flood_port_cnt !=  ofp_c2s_msg.ofp_packet_out.in_port ->
+							s2h_chan[switch_id].ports[flood_port_cnt] !  ofp_c2s_msg.ofp_packet_out.mac_packet;
+						::else->
+							skip;
+						fi;
+						flood_port_cnt++;
+					:: flood_port_cnt >= HOST_NUM ->
+						break;
+					od			
+				fi
+			::else->
+				skip		
+			fi
+		};
+		::else->skip
+		fi;
 
 od
 };
@@ -412,7 +417,6 @@ typedef mactable_row {
 };
 proctype controller(){
 byte dpid;
-ofp_packet_in_t ofp_packet_in;
 
 mactable_row mactable[SWITCH_NUM]; 
 mactable_entry new_entry;
@@ -426,17 +430,20 @@ byte prt;
 ofp_match match;
 ofp_action_header action;
 chan ofp_action_header_exchange_chan = [1] of { ofp_action_header  };
-ofp_flow_mod_t ofp_flow_mod;
-ofp_packet_out_t ofp_packet_out;
+ofp_c2s_msg_t ofp_c2s_msg;
+mtype ofp_type;
+ofp_asyn_msg_t ofp_asyn_msg;
 
 byte end_msg;
 
 packet_in:
 	do
-	:: s2c_packet_in_chan ? /* OFPT_PACKET_IN, */ dpid, ofp_packet_in->
+	:: s2c_asyn_msg_chan ? /* OFPT_PACKET_IN, */ dpid, ofp_type, ofp_asyn_msg->
 do_l2_learning:
+	if
+	::ofp_type == OFPT_PACKET_IN ->
 		atomic{
-		mac_packet_exchange_chan ! ofp_packet_in.mac_packet;
+		mac_packet_exchange_chan ! ofp_asyn_msg.ofp_packet_in.mac_packet;
 		mac_packet_exchange_chan ? mac_packet;
 		srcaddr = mac_packet.src;
 		
@@ -446,9 +453,9 @@ do_l2_learning:
 			/* mactable has an entry of srcaddr */
 			::mactable[dpid].column[srcaddr].used == true->
 				if
-				::mactable[dpid].column[srcaddr].in_port!=ofp_packet_in.in_port-> 
+				::mactable[dpid].column[srcaddr].in_port!= ofp_asyn_msg.ofp_packet_in.in_port-> 
 				/* MAC has moved! */
-					mactable[dpid].column[srcaddr].in_port = ofp_packet_in.in_port;
+					mactable[dpid].column[srcaddr].in_port =  ofp_asyn_msg.ofp_packet_in.in_port;
 					/* new_entry.time =    timestamp ? */
 					mac_packet_exchange_chan ! mac_packet;
 					mac_packet_exchange_chan ? mactable[dpid].column[srcaddr].mac_packet;
@@ -459,7 +466,7 @@ do_l2_learning:
 			/* mactable has no entry of srcaddr */
 			::mactable[dpid].column[srcaddr].used == false->
 				new_entry.used = true;
-				new_entry.in_port = ofp_packet_in.in_port;
+				new_entry.in_port =  ofp_asyn_msg.ofp_packet_in.in_port;
 				/* new_entry.time =    timestamp ? */
 				mac_packet_exchange_chan ! mac_packet;
 				mac_packet_exchange_chan ? new_entry.mac_packet;
@@ -471,62 +478,66 @@ do_l2_learning:
 			break
 		fi;
 forward_l2_packet:
-		dstaddr = ofp_packet_in.mac_packet.dst;
+		dstaddr =  ofp_asyn_msg.ofp_packet_in.mac_packet.dst;
 		if
 		::dstaddr != BCAST_ADDR && mactable[dpid].column[dstaddr].used == true ->
 			prt = mactable[dpid].column[dstaddr].in_port ->
 			if
-			:: prt == ofp_packet_in.in_port ->
+			:: prt ==  ofp_asyn_msg.ofp_packet_in.in_port ->
 				goto send_openflow_OFPP_FLOOD; /* c2s_port_flood_chan[dpid] ! port */
-			:: prt != ofp_packet_in.in_port ->
+			:: prt !=  ofp_asyn_msg.ofp_packet_in.in_port ->
 install_datapath_flow:
 				/* flow */
-				ofp_flow_mod.match.dl_src = mac_packet.src;
-				ofp_flow_mod.match.dl_dst = mac_packet.dst;
-				ofp_flow_mod.match.in_port =  ofp_packet_in.in_port;
+				ofp_c2s_msg.ofp_flow_mod.match.dl_src = mac_packet.src;
+				ofp_c2s_msg.ofp_flow_mod.match.dl_dst = mac_packet.dst;
+				ofp_c2s_msg.ofp_flow_mod.match.in_port =   ofp_asyn_msg.ofp_packet_in.in_port;
 		       		/* actions */
 				action.type = OFPAT_OUTPUT;
 				action.arg1 = prt;
 				/* install_flow */
-				ofp_flow_mod.command = OFPFC_ADD;
+				ofp_c2s_msg.ofp_flow_mod.command = OFPFC_ADD;
 				
 				ofp_action_header_exchange_chan	! action;
-				ofp_action_header_exchange_chan ? ofp_flow_mod.action;
+				ofp_action_header_exchange_chan ? ofp_c2s_msg.ofp_flow_mod.action;
 send_flow_command:
-				c2s_flow_mod_chan[dpid] ! /* OFPT_FLOW_MOD,*/ ofp_flow_mod;
+				c2s_msg_chan[dpid] !  OFPT_FLOW_MOD, ofp_c2s_msg;
 send_openflow_packet:
 send_openflow_packet_out:
 
 				mac_packet_exchange_chan ! mac_packet;
-				mac_packet_exchange_chan ? ofp_packet_out.mac_packet;
+				mac_packet_exchange_chan ? ofp_c2s_msg.ofp_packet_out.mac_packet;
 
 				ofp_action_header_exchange_chan	! action;
-				ofp_action_header_exchange_chan	? ofp_packet_out.action;
-				ofp_packet_out.in_port = ofp_packet_in.in_port;
+				ofp_action_header_exchange_chan	? ofp_c2s_msg.ofp_packet_out.action;
+				ofp_c2s_msg.ofp_packet_out.in_port =  ofp_asyn_msg.ofp_packet_in.in_port;
 
-				c2s_packet_out_chan[dpid] ! /* OFPT_PACKET_OUT,*/ ofp_packet_out;					
+				c2s_msg_chan[dpid] ! OFPT_PACKET_OUT, ofp_c2s_msg;					
 			fi;
 		::else->
 send_openflow_OFPP_FLOOD:
 			action.type = OFPAT_OUTPUT;
 			action.arg1 = OFPP_FLOOD;
 			mac_packet_exchange_chan ! mac_packet;
-			mac_packet_exchange_chan ? ofp_packet_out.mac_packet;
+			mac_packet_exchange_chan ? ofp_c2s_msg.ofp_packet_out.mac_packet;
 			ofp_action_header_exchange_chan	! action;
-			ofp_action_header_exchange_chan	? ofp_packet_out.action;
-			ofp_packet_out.in_port = ofp_packet_in.in_port;
-			c2s_packet_out_chan[dpid] ! /* OFPT_PACKET_OUT,*/ ofp_packet_out;					
+			ofp_action_header_exchange_chan	? ofp_c2s_msg.ofp_packet_out.action;
+			ofp_c2s_msg.ofp_packet_out.in_port =  ofp_asyn_msg.ofp_packet_in.in_port;
+			c2s_msg_chan[dpid] !  OFPT_PACKET_OUT, ofp_c2s_msg;					
 
 		fi
 		};
-
-   ::s2c_end_msg_chan ? end_msg ->
+	::else->
+		skip
+	fi
+	::s2c_end_msg_chan ? end_msg ->
 datapath_leave:
 		switch_used_total --;
 		if
 		::switch_used_total == 0->break
 		::switch_used_total != 0->skip
 		fi
+
+
 		
 	od;
 
@@ -537,11 +548,13 @@ timer:
 init{
 	ports_used[0].ports[0] = true;
 	ports_used[0].ports[1] = true;
-	/* ports_used[0].ports[2] = true; */
-	ports_used_total[0] = 2;
+	ports_used[0].ports[2] = true; 
+	/* ports_used_total[0] = 2; */
+	ports_used_total[0] = 3;
 	switch_used_total = 1;
 	run controller();
 	run switch(0);
-	run moving_send_host(0, 1, 0, 0, 2);
+	/* run send_host(0, 1, 0, 0); */
+	run moving_send_host(0, 1, 0, 0, 2); 
 	run recv_host(1, 0, 1);
 }
